@@ -473,6 +473,11 @@ type (
 		Dir   ChanDir   // channel direction
 		Value Expr      // value type
 	}
+
+	UniformType struct {
+		Begin token.Pos // position of "uniform" keyword
+		Elt   Expr      // element type
+	}
 )
 
 // Pos and End implementations for expression/type nodes.
@@ -510,6 +515,7 @@ func (x *FuncType) Pos() token.Pos {
 func (x *InterfaceType) Pos() token.Pos { return x.Interface }
 func (x *MapType) Pos() token.Pos       { return x.Map }
 func (x *ChanType) Pos() token.Pos      { return x.Begin }
+func (x *UniformType) Pos() token.Pos   { return x.Begin }
 
 func (x *BadExpr) End() token.Pos { return x.To }
 func (x *Ident) End() token.Pos   { return token.Pos(int(x.NamePos) + len(x.Name)) }
@@ -544,6 +550,7 @@ func (x *FuncType) End() token.Pos {
 func (x *InterfaceType) End() token.Pos { return x.Methods.End() }
 func (x *MapType) End() token.Pos       { return x.Value.End() }
 func (x *ChanType) End() token.Pos      { return x.Value.End() }
+func (x *UniformType) End() token.Pos   { return x.Elt.End() }
 
 // exprNode() ensures that only expression/type nodes can be
 // assigned to an Expr.
@@ -571,6 +578,7 @@ func (*FuncType) exprNode()      {}
 func (*InterfaceType) exprNode() {}
 func (*MapType) exprNode()       {}
 func (*ChanType) exprNode()      {}
+func (*UniformType) exprNode()   {}
 
 // ----------------------------------------------------------------------------
 // Convenience functions for Idents
@@ -692,6 +700,12 @@ type (
 		Rbrace token.Pos // position of "}", if any (may be absent due to syntax error)
 	}
 
+	// An IspmdStmt node represents an ispmd context
+	IspmdStmt struct {
+		Ispmd token.Pos // position of "ispmd" keyword
+		Body  Stmt
+	}
+
 	// An IfStmt node represents an if statement.
 	IfStmt struct {
 		If   token.Pos // position of "if" keyword
@@ -757,6 +771,16 @@ type (
 		X          Expr        // value to range over
 		Body       *BlockStmt
 	}
+
+	EachStmt struct {
+		For    token.Pos   // position of "for" keyword
+		Index  Expr        // index expression
+		TokPos token.Pos   // position of Tok; invalid if Index == nil
+		Tok    token.Token // ILLEGAL if Index == nil, ASSIGN, DEFINE
+		From   Expr        // start expression
+		To     Expr        // end expression
+		Body   *BlockStmt
+	}
 )
 
 // Pos and End implementations for statement nodes.
@@ -774,6 +798,7 @@ func (s *DeferStmt) Pos() token.Pos      { return s.Defer }
 func (s *ReturnStmt) Pos() token.Pos     { return s.Return }
 func (s *BranchStmt) Pos() token.Pos     { return s.TokPos }
 func (s *BlockStmt) Pos() token.Pos      { return s.Lbrace }
+func (s *IspmdStmt) Pos() token.Pos      { return s.Ispmd }
 func (s *IfStmt) Pos() token.Pos         { return s.If }
 func (s *CaseClause) Pos() token.Pos     { return s.Case }
 func (s *SwitchStmt) Pos() token.Pos     { return s.Switch }
@@ -782,6 +807,7 @@ func (s *CommClause) Pos() token.Pos     { return s.Case }
 func (s *SelectStmt) Pos() token.Pos     { return s.Select }
 func (s *ForStmt) Pos() token.Pos        { return s.For }
 func (s *RangeStmt) Pos() token.Pos      { return s.For }
+func (s *EachStmt) Pos() token.Pos       { return s.For }
 
 func (s *BadStmt) End() token.Pos  { return s.To }
 func (s *DeclStmt) End() token.Pos { return s.Decl.End() }
@@ -821,6 +847,9 @@ func (s *BlockStmt) End() token.Pos {
 	}
 	return s.Lbrace + 1
 }
+func (s *IspmdStmt) End() token.Pos {
+	return s.Body.End()
+}
 func (s *IfStmt) End() token.Pos {
 	if s.Else != nil {
 		return s.Else.End()
@@ -844,6 +873,7 @@ func (s *CommClause) End() token.Pos {
 func (s *SelectStmt) End() token.Pos { return s.Body.End() }
 func (s *ForStmt) End() token.Pos    { return s.Body.End() }
 func (s *RangeStmt) End() token.Pos  { return s.Body.End() }
+func (s *EachStmt) End() token.Pos   { return s.Body.End() }
 
 // stmtNode() ensures that only statement nodes can be
 // assigned to a Stmt.
@@ -860,6 +890,7 @@ func (*DeferStmt) stmtNode()      {}
 func (*ReturnStmt) stmtNode()     {}
 func (*BranchStmt) stmtNode()     {}
 func (*BlockStmt) stmtNode()      {}
+func (*IspmdStmt) stmtNode()      {}
 func (*IfStmt) stmtNode()         {}
 func (*CaseClause) stmtNode()     {}
 func (*SwitchStmt) stmtNode()     {}
@@ -868,6 +899,7 @@ func (*CommClause) stmtNode()     {}
 func (*SelectStmt) stmtNode()     {}
 func (*ForStmt) stmtNode()        {}
 func (*RangeStmt) stmtNode()      {}
+func (*EachStmt) stmtNode()       {}
 
 // ----------------------------------------------------------------------------
 // Declarations
@@ -984,6 +1016,8 @@ type (
 		Name *Ident        // function/method name
 		Type *FuncType     // function signature: type and value parameters, results, and position of "func" keyword
 		Body *BlockStmt    // function body; or nil for external (non-Go) function
+
+		ISPMD bool // function is implicit single program processing multiple data function
 	}
 )
 

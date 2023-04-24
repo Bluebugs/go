@@ -1487,6 +1487,17 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 		p.print(blank)
 		p.block(s.Body, 1)
 
+	case *ast.EachStmt:
+		p.print(token.FOR, blank)
+		p.expr(s.Index)
+		p.print(blank, s.TokPos, s.Tok, blank)
+		p.print(token.EACH, blank)
+		p.expr(stripParens(s.From))
+		p.print(blank, token.ELLIPSIS, blank)
+		p.expr(stripParens(s.To))
+		p.print(blank)
+		p.block(s.Body, 1)
+
 	default:
 		panic("unreachable")
 	}
@@ -1844,7 +1855,11 @@ func (p *printer) distanceFrom(startPos token.Pos, startOutCol int) int {
 
 func (p *printer) funcDecl(d *ast.FuncDecl) {
 	p.setComment(d.Doc)
-	p.print(d.Pos(), token.FUNC, blank)
+	if d.ISPMD {
+		p.print(d.Pos(), token.ISPMD, blank, token.FUNC, blank)
+	} else {
+		p.print(d.Pos(), token.FUNC, blank)
+	}
 	// We have to save startCol only after emitting FUNC; otherwise it can be on a
 	// different line (all whitespace preceding the FUNC is emitted only when the
 	// FUNC is emitted).

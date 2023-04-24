@@ -63,6 +63,9 @@ type parser struct {
 	// nestLev is used to track and limit the recursion depth
 	// during parsing.
 	nestLev int
+
+	// Parsing an ispmd context
+	ispmd bool
 }
 
 func (p *parser) init(fset *token.FileSet, filename string, src []byte, mode Mode) {
@@ -345,7 +348,7 @@ func (p *parser) atComma(context string, follow token.Token) bool {
 		if p.tok == token.SEMICOLON && p.lit == "\n" {
 			msg += " before newline"
 		}
-		p.error(p.pos, msg+" in "+context)
+		p.error(p.pos, msg+" in "+context+" token "+p.tok.String())
 		return true // "insert" comma and continue
 	}
 	return false
@@ -544,6 +547,16 @@ func (p *parser) parseTypeName(ident *ast.Ident) ast.Expr {
 	}
 
 	return ident
+}
+
+func (p *parser) parseUniformType() *ast.UniformType {
+	if p.trace {
+		defer un(trace(p, "UniformType"))
+	}
+
+	pos := p.expect(token.UNIFORM)
+	elt := p.parseType()
+	return &ast.UniformType{Begin: pos, Elt: elt}
 }
 
 // "[" has already been consumed, and lbrack is its position.
@@ -767,7 +780,7 @@ func (p *parser) parseParamDecl(name *ast.Ident, typeSetsOK bool) (f field) {
 			f.name = p.parseIdent()
 		}
 		switch p.tok {
-		case token.IDENT, token.MUL, token.ARROW, token.FUNC, token.CHAN, token.MAP, token.STRUCT, token.INTERFACE, token.LPAREN:
+		case token.IDENT, token.MUL, token.ARROW, token.FUNC, token.CHAN, token.MAP, token.STRUCT, token.INTERFACE, token.LPAREN, token.UNIFORM:
 			// name type
 			f.typ = p.parseType()
 
@@ -800,7 +813,7 @@ func (p *parser) parseParamDecl(name *ast.Ident, typeSetsOK bool) (f field) {
 			}
 		}
 
-	case token.MUL, token.ARROW, token.FUNC, token.LBRACK, token.CHAN, token.MAP, token.STRUCT, token.INTERFACE, token.LPAREN:
+	case token.MUL, token.ARROW, token.FUNC, token.LBRACK, token.CHAN, token.MAP, token.STRUCT, token.INTERFACE, token.LPAREN, token.UNIFORM:
 		// type
 		f.typ = p.parseType()
 
@@ -1282,6 +1295,8 @@ func (p *parser) tryIdentOrType() ast.Expr {
 			typ = p.parseTypeInstance(typ)
 		}
 		return typ
+	case token.UNIFORM:
+		return p.parseUniformType()
 	case token.LBRACK:
 		lbrack := p.expect(token.LBRACK)
 		return p.parseArrayType(lbrack, nil)
@@ -1904,7 +1919,7 @@ const (
 // of a range clause (with mode == rangeOk). The returned statement is an
 // assignment with a right-hand side that is a single unary expression of
 // the form "range x". No guarantees are given for the left-hand side.
-func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
+func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool, bool) {
 	if p.trace {
 		defer un(trace(p, "SimpleStmt"))
 	}
@@ -1927,6 +1942,21 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 			p.next()
 			y = []ast.Expr{&ast.UnaryExpr{OpPos: pos, Op: token.RANGE, X: p.parseRhs()}}
 			isRange = true
+		} else if mode == rangeOk && p.tok == token.EACH && (tok == token.DEFINE || p.tok == token.ASSIGN) {
+			pos := p.pos
+			p.next()
+
+			if len(x) != 1 {
+				p.errorExpected(x[0].Pos(), "at most 1 expression")
+				return &ast.BadStmt{From: x[0].Pos(), To: x[len(x)-1].End()}, false, false
+			}
+
+			start := p.parseExpr()
+			p.expect(token.ELLIPSIS)
+			end := p.parseExpr()
+
+			as := &ast.EachStmt{Index: x[0], TokPos: pos, Tok: tok, From: start, To: end}
+			return as, false, true
 		} else {
 			y = p.parseList(true)
 		}
@@ -1934,7 +1964,7 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 		if tok == token.DEFINE {
 			p.checkAssignStmt(as)
 		}
-		return as, isRange
+		return as, isRange, false
 	}
 
 	if len(x) > 1 {
@@ -1952,7 +1982,7 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 			// in which it is declared and excludes the body of any nested
 			// function.
 			stmt := &ast.LabeledStmt{Label: label, Colon: colon, Stmt: p.parseStmt()}
-			return stmt, false
+			return stmt, false, false
 		}
 		// The label declaration typically starts at x[0].Pos(), but the label
 		// declaration may be erroneous due to a token after that position (and
@@ -1961,24 +1991,24 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 		// before the ':' that caused the problem. Thus, use the (latest) colon
 		// position for error reporting.
 		p.error(colon, "illegal label declaration")
-		return &ast.BadStmt{From: x[0].Pos(), To: colon + 1}, false
+		return &ast.BadStmt{From: x[0].Pos(), To: colon + 1}, false, false
 
 	case token.ARROW:
 		// send statement
 		arrow := p.pos
 		p.next()
 		y := p.parseRhs()
-		return &ast.SendStmt{Chan: x[0], Arrow: arrow, Value: y}, false
+		return &ast.SendStmt{Chan: x[0], Arrow: arrow, Value: y}, false, false
 
 	case token.INC, token.DEC:
 		// increment or decrement
 		s := &ast.IncDecStmt{X: x[0], TokPos: p.pos, Tok: p.tok}
 		p.next()
-		return s, false
+		return s, false, false
 	}
 
 	// expression
-	return &ast.ExprStmt{X: x[0]}, false
+	return &ast.ExprStmt{X: x[0]}, false, false
 }
 
 func (p *parser) checkAssignStmt(as *ast.AssignStmt) {
@@ -2097,7 +2127,7 @@ func (p *parser) parseIfHeader() (init ast.Stmt, cond ast.Expr) {
 			p.next()
 			p.error(p.pos, "var declaration not allowed in 'IF' initializer")
 		}
-		init, _ = p.parseSimpleStmt(basic)
+		init, _, _ = p.parseSimpleStmt(basic)
 	}
 
 	var condStmt ast.Stmt
@@ -2114,7 +2144,7 @@ func (p *parser) parseIfHeader() (init ast.Stmt, cond ast.Expr) {
 			p.expect(token.SEMICOLON)
 		}
 		if p.tok != token.LBRACE {
-			condStmt, _ = p.parseSimpleStmt(basic)
+			condStmt, _, _ = p.parseSimpleStmt(basic)
 		}
 	} else {
 		condStmt = init
@@ -2138,6 +2168,26 @@ func (p *parser) parseIfHeader() (init ast.Stmt, cond ast.Expr) {
 
 	p.exprLev = prevLev
 	return
+}
+
+func (p *parser) parseIspmdStmt() *ast.IspmdStmt {
+	defer decNestLev(incNestLev(p))
+
+	if p.ispmd {
+		p.errorExpected(p.pos, "already in a ispmd context")
+	}
+
+	p.ispmd = true
+	defer func() { p.ispmd = false }()
+
+	if p.trace {
+		defer un(trace(p, "IspmdStmt"))
+	}
+
+	pos := p.expect(token.ISPMD)
+	body := p.parseStmt()
+
+	return &ast.IspmdStmt{Ispmd: pos, Body: body}
 }
 
 func (p *parser) parseIfStmt() *ast.IfStmt {
@@ -2248,7 +2298,7 @@ func (p *parser) parseSwitchStmt() ast.Stmt {
 		prevLev := p.exprLev
 		p.exprLev = -1
 		if p.tok != token.SEMICOLON {
-			s2, _ = p.parseSimpleStmt(basic)
+			s2, _, _ = p.parseSimpleStmt(basic)
 		}
 		if p.tok == token.SEMICOLON {
 			p.next()
@@ -2267,7 +2317,7 @@ func (p *parser) parseSwitchStmt() ast.Stmt {
 				//
 				// If we don't have a type switch, s2 must be an expression.
 				// Having the extra nested but empty scope won't affect it.
-				s2, _ = p.parseSimpleStmt(basic)
+				s2, _, _ = p.parseSimpleStmt(basic)
 			}
 		}
 		p.exprLev = prevLev
@@ -2373,6 +2423,7 @@ func (p *parser) parseForStmt() ast.Stmt {
 
 	var s1, s2, s3 ast.Stmt
 	var isRange bool
+	var isEach bool
 	if p.tok != token.LBRACE {
 		prevLev := p.exprLev
 		p.exprLev = -1
@@ -2385,19 +2436,19 @@ func (p *parser) parseForStmt() ast.Stmt {
 				s2 = &ast.AssignStmt{Rhs: y}
 				isRange = true
 			} else {
-				s2, isRange = p.parseSimpleStmt(rangeOk)
+				s2, isRange, isEach = p.parseSimpleStmt(rangeOk)
 			}
 		}
-		if !isRange && p.tok == token.SEMICOLON {
+		if (!isRange && !isEach) && p.tok == token.SEMICOLON {
 			p.next()
 			s1 = s2
 			s2 = nil
 			if p.tok != token.SEMICOLON {
-				s2, _ = p.parseSimpleStmt(basic)
+				s2, _, _ = p.parseSimpleStmt(basic)
 			}
 			p.expectSemi()
 			if p.tok != token.LBRACE {
-				s3, _ = p.parseSimpleStmt(basic)
+				s3, _, _ = p.parseSimpleStmt(basic)
 			}
 		}
 		p.exprLev = prevLev
@@ -2434,6 +2485,12 @@ func (p *parser) parseForStmt() ast.Stmt {
 			Body:   body,
 		}
 	}
+	if isEach {
+		as := s2.(*ast.EachStmt)
+		as.For = pos
+		as.Body = body
+		return as
+	}
 
 	// regular for statement
 	return &ast.ForStmt{
@@ -2460,7 +2517,7 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 		token.IDENT, token.INT, token.FLOAT, token.IMAG, token.CHAR, token.STRING, token.FUNC, token.LPAREN, // operands
 		token.LBRACK, token.STRUCT, token.MAP, token.CHAN, token.INTERFACE, // composite types
 		token.ADD, token.SUB, token.MUL, token.AND, token.XOR, token.ARROW, token.NOT: // unary operators
-		s, _ = p.parseSimpleStmt(labelOk)
+		s, _, _ = p.parseSimpleStmt(labelOk)
 		// because of the required look-ahead, labeled statements are
 		// parsed by parseSimpleStmt - don't expect a semicolon after
 		// them
@@ -2495,6 +2552,8 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 	case token.RBRACE:
 		// a semicolon may be omitted before a closing "}"
 		s = &ast.EmptyStmt{Semicolon: p.pos, Implicit: true}
+	case token.ISPMD:
+		s = p.parseIspmdStmt()
 	default:
 		// no statement found
 		pos := p.pos
@@ -2793,6 +2852,13 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 	}
 
 	doc := p.leadComment
+
+	if p.tok == token.ISPMD {
+		p.ispmd = true
+		defer func() { p.ispmd = false }()
+		p.next()
+	}
+
 	pos := p.expect(token.FUNC)
 
 	var recv *ast.FieldList
@@ -2838,7 +2904,8 @@ func (p *parser) parseFuncDecl() *ast.FuncDecl {
 			Params:     params,
 			Results:    results,
 		},
-		Body: body,
+		Body:  body,
+		ISPMD: p.ispmd,
 	}
 	return decl
 }
@@ -2856,6 +2923,8 @@ func (p *parser) parseDecl(sync map[token.Token]bool) ast.Decl {
 	case token.TYPE:
 		f = p.parseTypeSpec
 
+	case token.ISPMD:
+		fallthrough
 	case token.FUNC:
 		return p.parseFuncDecl()
 

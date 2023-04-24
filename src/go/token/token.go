@@ -123,6 +123,10 @@ const (
 	SWITCH
 	TYPE
 	VAR
+
+	ISPMD
+	UNIFORM
+	EACH
 	keyword_end
 
 	additional_beg
@@ -229,6 +233,10 @@ var tokens = [...]string{
 	SWITCH: "switch",
 	TYPE:   "type",
 	VAR:    "var",
+
+	ISPMD:   "ispmd",
+	UNIFORM: "uniform",
+	EACH:    "each",
 
 	TILDE: "~",
 }

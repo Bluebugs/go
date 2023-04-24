@@ -158,6 +158,9 @@ func Walk(v Visitor, node Node) {
 		Walk(v, n.Value)
 
 	// Types
+	case *UniformType:
+		Walk(v, n.Elt)
+
 	case *ArrayType:
 		if n.Len != nil {
 			Walk(v, n.Len)
@@ -233,6 +236,9 @@ func Walk(v Visitor, node Node) {
 	case *BlockStmt:
 		walkStmtList(v, n.List)
 
+	case *IspmdStmt:
+		Walk(v, n.Body)
+
 	case *IfStmt:
 		if n.Init != nil {
 			Walk(v, n.Init)
@@ -292,6 +298,12 @@ func Walk(v Visitor, node Node) {
 			Walk(v, n.Value)
 		}
 		Walk(v, n.X)
+		Walk(v, n.Body)
+
+	case *EachStmt:
+		Walk(v, n.Index)
+		Walk(v, n.From)
+		Walk(v, n.To)
 		Walk(v, n.Body)
 
 	// Declarations
