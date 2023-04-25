@@ -779,6 +779,7 @@ type (
 		Tok    token.Token // ILLEGAL if Index == nil, ASSIGN, DEFINE
 		From   Expr        // start expression
 		To     Expr        // end expression
+		Cond   Expr        // generated condition
 		Body   *BlockStmt
 	}
 )

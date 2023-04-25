@@ -880,7 +880,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		if s.Tok == token.DEFINE {
 			var vars []*Var
 			var obj *Var
-			if ident, _ := s.Index.(*ast.Ident); ident != nil {
+			if ident, ok := s.Index.(*ast.Ident); ok {
 				name := ident.Name
 				obj = NewVar(ident.Pos(), check.pkg, name, nil)
 				check.recordDef(ident, obj)
@@ -918,6 +918,15 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			index.typ = indexType
 			check.assignVar(s.From, &index)
 		}
+
+		if ident, ok := s.Index.(*ast.Ident); ok {
+			name := ident.Name
+			if obj := check.scope.Lookup(name); obj != nil {
+				check.recordUse(ident, obj)
+			}
+		}
+		var cond operand
+		check.expr(&cond, s.Cond)
 
 		check.stmt(inner, s.Body)
 

@@ -1955,7 +1955,10 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool, bool) {
 			p.expect(token.ELLIPSIS)
 			end := p.parseExpr()
 
-			as := &ast.EachStmt{Index: x[0], TokPos: pos, Tok: tok, From: start, To: end}
+			as := &ast.EachStmt{Index: x[0], TokPos: pos, Tok: tok,
+				From: start, To: end,
+				Cond: p.makeExpr(&ast.ExprStmt{&ast.BinaryExpr{X: x[0], OpPos: pos, Op: token.LEQ, Y: end}}, "boolean or range expression"),
+			}
 			return as, false, true
 		} else {
 			y = p.parseList(true)
