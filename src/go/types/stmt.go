@@ -556,6 +556,13 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			check.invalidAST(s, "branch statement: %s", s.Tok)
 		}
 
+	case *ast.IspmdStmt:
+		check.openScope(s, "ispmd")
+		defer check.closeScope()
+
+		// FIXME: switch to ispmd context
+		check.stmt(inner, s.Body)
+
 	case *ast.BlockStmt:
 		check.openScope(s, "block")
 		defer check.closeScope()
@@ -821,6 +828,83 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			// these lhs variables being declared but not used.
 			check.use(s.Lhs...) // avoid follow-up errors
 		}
+		check.stmt(inner, s.Body)
+
+	case *ast.EachStmt:
+		inner |= breakOk | continueOk
+
+		var to operand
+		var from operand
+		check.expr(&from, s.From)
+		check.expr(&to, s.To)
+
+		var indexType Type
+		if from.mode == invalid || to.mode == invalid {
+			check.softErrorf(&from, _InvalidEachExpr, "cannot go for each from %s to %s", &from, &to)
+		} else if !allNumeric(from.typ) || !allNumeric(to.typ) {
+			if !allNumeric(from.typ) {
+				check.softErrorf(&from, _InvalidEachExpr, "%s is not a numerical type", &from)
+			}
+			if !allNumeric(to.typ) {
+				check.softErrorf(&to, _InvalidEachExpr, "%s is not a numerical type", &to)
+			}
+		} else {
+			check.convertUntyped(&from, Default(from.typ))
+			check.convertUntyped(&to, Default(to.typ))
+			if !Identical(from.typ, to.typ) {
+				check.softErrorf(&from, _InvalidEachExpr, "type of %s and %s do not match", &from, &to)
+			} else {
+				indexType = from.typ
+			}
+		}
+
+		check.openScope(s, "each")
+		defer check.closeScope()
+
+		var index operand
+
+		if s.Tok == token.DEFINE {
+			var vars []*Var
+			var obj *Var
+			if ident, _ := s.Index.(*ast.Ident); ident != nil {
+				name := ident.Name
+				obj = NewVar(ident.Pos(), check.pkg, name, nil)
+				check.recordDef(ident, obj)
+				// _ variables don't count as new variables
+				if name != "_" {
+					vars = append(vars, obj)
+				}
+			} else {
+				check.invalidAST(s.Index, "cannot declare %s", s.Index)
+				obj = NewVar(s.Index.Pos(), check.pkg, "_", nil) // dummy variable
+			}
+
+			if indexType != nil {
+				index.mode = value
+				index.expr = s.From
+				index.typ = indexType
+				check.initVar(obj, &index, "each clause")
+			} else {
+				obj.typ = Typ[Invalid]
+				obj.used = true // don't complain about unused variable
+			}
+
+			// declare variables
+			if len(vars) > 0 {
+				scopePos := s.Body.Pos()
+				for _, obj := range vars {
+					check.declare(check.scope, nil /* recordDef already called */, obj, scopePos)
+				}
+			} else {
+				check.error(inNode(s, s.TokPos), _NoNewVar, "no new variables on left side of :=")
+			}
+		} else {
+			index.mode = value
+			index.expr = s.From
+			index.typ = indexType
+			check.assignVar(s.From, &index)
+		}
+
 		check.stmt(inner, s.Body)
 
 	case *ast.RangeStmt:

@@ -282,6 +282,9 @@ func (check *Checker) typInternal(e0 ast.Expr, def *Named) (T Type) {
 		// Consequently, generic types cannot be parenthesized.
 		return check.definedType(e.X, def)
 
+	case *ast.UniformType:
+		return check.varType(e.Elt)
+
 	case *ast.ArrayType:
 		if e.Len == nil {
 			typ := new(Slice)

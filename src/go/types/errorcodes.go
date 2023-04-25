@@ -1003,6 +1003,17 @@ const (
 	//  }
 	_InvalidRangeExpr
 
+	// _InvalidEachExpr occurs when the type of an each expression to and from
+	// do not match and are not a numerical value.
+	//
+	// Example:
+	//  func f() {
+	//  	for i := each "a" ... 123 {
+	//  		println(i)
+	//  	}
+	//  }
+	_InvalidEachExpr
+
 	// _MisplacedBreak occurs when a break statement is not within a for, switch,
 	// or select statement of the innermost function definition.
 	//
