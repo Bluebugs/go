@@ -40,6 +40,11 @@ func (check *Checker) funcBody(decl *declInfo, name string, sig *Signature, body
 	}
 	check.indent = 0
 
+	if decl.fdecl != nil && decl.fdecl.ISPMD {
+		check.ispmd = true
+		defer func() { check.ispmd = false }()
+	}
+
 	check.stmtList(0, body.List)
 
 	if check.hasLabel {
@@ -560,7 +565,12 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		check.openScope(s, "ispmd")
 		defer check.closeScope()
 
-		// FIXME: switch to ispmd context
+		if check.ispmd {
+			check.error(s, _NestedIspmd, "ispmd statement cannot be nested")
+		} else {
+			check.ispmd = true
+			defer func() { check.ispmd = false }()
+		}
 		check.stmt(inner, s.Body)
 
 	case *ast.BlockStmt:
@@ -832,6 +842,10 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 
 	case *ast.EachStmt:
 		inner |= breakOk | continueOk
+
+		if !check.ispmd {
+			check.softErrorf(s, _InvalidEachExpr, "each statement is only allowed in an ispmd context")
+		}
 
 		var to operand
 		var from operand

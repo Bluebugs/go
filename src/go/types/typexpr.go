@@ -283,6 +283,9 @@ func (check *Checker) typInternal(e0 ast.Expr, def *Named) (T Type) {
 		return check.definedType(e.X, def)
 
 	case *ast.UniformType:
+		if !check.ispmd {
+			check.softErrorf(e, _UnsupportedFeature, "cannot use uniform type outside an ispmd context")
+		}
 		return check.varType(e.Elt)
 
 	case *ast.ArrayType:

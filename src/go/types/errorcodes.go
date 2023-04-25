@@ -960,6 +960,18 @@ const (
 	//  }
 	_OutOfScopeResult
 
+	// _NestedIspmd occurs when an ispmd block is nested inside an ispmd context.
+	// This can be an ispmd block inside an ispmd function, or an ispmd block
+	// inside an ispmd block.
+	//
+	// Example:
+	//  ispmd func f() {
+	//  	ispmd {
+	//  		println("nested ispmd")
+	//  	}
+	//  }
+	_NestedIspmd
+
 	// _InvalidCond occurs when an if condition is not a boolean expression.
 	//
 	// Example:
