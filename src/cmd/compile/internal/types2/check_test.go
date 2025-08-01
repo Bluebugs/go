@@ -393,6 +393,15 @@ func TestFixedbugs(t *testing.T) {
 }                            // TODO(gri) narrow column tolerance
 func TestLocal(t *testing.T) { testDirFiles(t, "testdata/local", 0, false) }
 
+// TestSPMDTypeChecking tests the type checking rules for SPMD constructs
+func TestSPMDTypeChecking(t *testing.T) {
+	if !buildcfg.Experiment.SPMD {
+		t.Skip("SPMD experiment not enabled")
+	}
+	
+	testDirFiles(t, "testdata/spmd", 0, false)
+}
+
 func testDirFiles(t *testing.T, dir string, colDelta uint, manual bool) {
 	testenv.MustHaveGoBuild(t)
 	dir = filepath.FromSlash(dir)
