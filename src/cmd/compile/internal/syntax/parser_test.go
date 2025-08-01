@@ -393,3 +393,120 @@ func TestUnpackListExprAllocs(t *testing.T) {
 		errorf("UnpackListExpr allocated %v times", allocs)
 	}
 }
+
+func TestSPMDParser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping SPMD parser test in short mode")
+	}
+
+	testDataDir := filepath.Join("testdata", "spmd")
+	entries, err := os.ReadDir(testDataDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.Skip("SPMD testdata directory not found")
+		}
+		t.Fatal(err)
+	}
+
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+
+		filename := filepath.Join(testDataDir, entry.Name())
+		t.Run(entry.Name(), func(t *testing.T) {
+			testSPMDFile(t, filename)
+		})
+	}
+}
+
+func testSPMDFile(t *testing.T, filename string) {
+	src, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Determine if this file should be tested with SPMD enabled or disabled
+	// based on build constraints
+	content := string(src)
+	spmdEnabled := strings.Contains(content, "//go:build goexperiment.spmd") ||
+		strings.Contains(content, "// +build goexperiment.spmd")
+	spmdDisabled := strings.Contains(content, "//go:build !goexperiment.spmd") ||
+		strings.Contains(content, "// +build !goexperiment.spmd")
+
+	if spmdEnabled {
+		t.Logf("Testing %s with SPMD enabled", filename)
+		testFileWithSPMD(t, filename, true)
+	} else if spmdDisabled {
+		t.Logf("Testing %s with SPMD disabled", filename)
+		testFileWithSPMD(t, filename, false)
+	} else {
+		// Test both modes for files without build constraints
+		t.Logf("Testing %s in both modes", filename)
+		t.Run("spmd_enabled", func(t *testing.T) {
+			testFileWithSPMD(t, filename, true)
+		})
+		t.Run("spmd_disabled", func(t *testing.T) {
+			testFileWithSPMD(t, filename, false)
+		})
+	}
+}
+
+func testFileWithSPMD(t *testing.T, filename string, spmdEnabled bool) {
+	// Parse the file and collect expected errors
+	src, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedErrors := CommentMap(strings.NewReader(string(src)), regexp.MustCompile("^ ERROR "))
+
+	// Parse the file
+	// Note: In a real implementation, we would need to set GOEXPERIMENT here
+	// For now, we'll parse without experiment support since the lexer/parser
+	// extensions haven't been implemented yet
+	
+	var errors []Error
+	_, parseErr := ParseFile(filename, func(err error) {
+		if syntaxErr, ok := err.(Error); ok {
+			errors = append(errors, syntaxErr)
+		}
+	}, nil, 0)
+
+	// If parse returned an error, add it to our error list
+	if parseErr != nil {
+		if syntaxErr, ok := parseErr.(Error); ok {
+			errors = append(errors, syntaxErr)
+		}
+	}
+
+	// For now, we expect parsing to fail for SPMD files since the syntax
+	// extensions haven't been implemented yet
+	if spmdEnabled && strings.Contains(string(src), "varying") {
+		if len(errors) == 0 {
+			t.Errorf("Expected parsing errors for SPMD syntax, but got none")
+		} else {
+			t.Logf("Got expected parsing errors for unimplemented SPMD syntax: %d errors", len(errors))
+		}
+		return
+	}
+
+	// Check that we got the expected errors
+	if len(expectedErrors) == 0 && len(errors) > 0 {
+		t.Errorf("Unexpected errors:")
+		for _, err := range errors {
+			t.Errorf("  %v", err)
+		}
+	} else if len(expectedErrors) > 0 && len(errors) == 0 {
+		t.Errorf("Expected errors but got none")
+	}
+
+	// For files that should parse successfully (backward compatibility),
+	// verify they actually do
+	if !spmdEnabled && len(expectedErrors) == 0 && len(errors) > 0 {
+		t.Errorf("Backward compatibility file should parse without errors, got:")
+		for _, err := range errors {
+			t.Errorf("  %v", err)
+		}
+	}
+}
