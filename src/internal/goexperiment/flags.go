@@ -128,4 +128,8 @@ type Flags struct {
 
 	// RuntimeSecret enables the runtime/secret package.
 	RuntimeSecret bool
+
+	// SPMD enables Single Program Multiple Data extensions
+	// including uniform/varying type qualifiers and go for loops
+	SPMD bool
 }
