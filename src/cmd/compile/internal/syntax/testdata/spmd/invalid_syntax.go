@@ -31,23 +31,8 @@ func invalidGoFor() {
 		process(i)
 	}
 	
-	// ERROR break statement not allowed in 'go for' loop
-	go for i := range 10 {
-		if i > 5 {
-			break
-		}
-		process(i)
-	}
-}
-
-// Invalid nested go for
-func invalidNested() {
-	// ERROR nested 'go for' loops not allowed
-	go for i := range 10 {
-		go for j := range 5 {
-			process(i + j)
-		}
-	}
+	// Note: break and nested go for restrictions are enforced in type checking,
+	// not parsing. See types2/testdata/spmd/ for those tests.
 }
 
 // Invalid constraint syntax
