@@ -83,13 +83,24 @@ func validBuiltins() {
 	}
 }
 
-// Valid control flow
+// Valid control flow (ISPC-based rules)
 func validControlFlow() {
+	threshold := uniform int(7) // same as threshold := 7
+	
 	go for i := range 10 {
-		if i > 5 {
-			continue // valid in go for
+		// VALID: return/break under uniform conditions
+		if threshold < 0 {
+			return // valid under uniform condition
 		}
-		// Note: break is not allowed in go for loops
+		
+		if threshold > 100 {
+			break // valid under uniform condition  
+		}
+		
+		// VALID: continue always allowed
+		if i > 5 { // varying condition
+			continue // always valid in go for
+		}
 		
 		process(i)
 	}
