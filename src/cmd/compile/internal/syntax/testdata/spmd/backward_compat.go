@@ -1,14 +1,12 @@
-//go:build !goexperiment.spmd
-
 // Code that uses "uniform" and "varying" as regular identifiers
-// This should parse successfully when GOEXPERIMENT=spmd is disabled
+// This should parse successfully in all circumstances
 package spmdtest
 
-// These should be valid identifiers when SPMD is disabled
+// These should be valid identifiers in all circumstances
 var uniform int = 42
 var varying float32 = 3.14
 
-// Using them as function names  
+// Using them as function names
 func uniform() int {
 	return 42
 }
@@ -27,19 +25,19 @@ func main() {
 	// Using uniform and varying as regular variable names
 	uniform = 100
 	varying = 2.71
-	
+
 	// Using them in function calls
 	process(uniform, varying)
-	
+
 	// Using them as function calls
 	_ = uniform()
 	_ = varying()
-	
+
 	c := Config{
 		uniform: 1,
 		varying: 2.0,
 	}
-	
+
 	_ = c
 }
 

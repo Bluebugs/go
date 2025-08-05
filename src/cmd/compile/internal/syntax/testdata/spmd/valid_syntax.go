@@ -15,6 +15,9 @@ func validDeclarations() {
 	var b varying float32 = 3.14
 	var c varying[4] int
 	var d varying[] byte
+	var e []varying int
+	var f []varying[8] float64
+	var g []varying[] byte
 	
 	// Valid function parameter types
 	func localFunc(x uniform int, y varying float32) varying int {
@@ -22,7 +25,7 @@ func validDeclarations() {
 	}
 	
 	_ = localFunc
-	_, _, _, _ = a, b, c, d
+	_, _, _, _, _, _, _ = a, b, c, d, e, f, g
 }
 
 // Valid go for loop syntax
@@ -41,6 +44,11 @@ func validGoFor() {
 	// go for with constrained range
 	go for i := range[4] 16 {
 		process(i)
+	}
+
+	// Infinite go for loop
+	go for {
+		process(0) // infinite loop
 	}
 }
 
