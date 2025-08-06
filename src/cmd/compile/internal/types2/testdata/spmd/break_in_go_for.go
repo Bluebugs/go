@@ -47,16 +47,16 @@ func main() {
 	}
 }
 
-// ILLEGAL: Break with condition in go for
+// LEGAL: Break with condition in go for
 func conditionalBreak() {
 	data := make([]int, 100)
 	
 	go for i := range data {
 		var condition varying bool = (data[i] > 50)
-		
-		// Even with reduction, break is not allowed
+
+		// With reduction and no preceding context alteration, break is allowed
 		if reduce.Any(condition) {
-			break  // ERROR: break statement not allowed in SPMD for loop
+			break  // LEGAL: break statement is allowed in a guaranteed pure uniform context withing a SPMD for loop
 		}
 		
 		data[i] = process(data[i])

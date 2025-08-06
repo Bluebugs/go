@@ -1,6 +1,7 @@
+//go:build goexperiment.spmd
+
 // Code that uses "uniform" and "varying" as regular identifiers
-// This should parse successfully in both SPMD enabled and disabled modes
-// demonstrating backward compatibility is maintained
+// This should parse successfully in all circumstances
 package spmdtest
 
 // These should be valid identifiers in all circumstances

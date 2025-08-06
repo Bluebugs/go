@@ -113,19 +113,17 @@ func testNestedConditions() {
 // Test 4: Edge cases with reduce operations
 func testReduceOperationEdgeCases() {
 	data := []int{1, 2, 3, 4, 5}
+	uniformCondition := true
 	
 	go for i := range len(data) {
 		// Edge case: reduce produces uniform result but from varying input
 		varyingCondition := data[i] > 3
 		
-		// This should still be considered varying context 
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 		if reduce.Any(varyingCondition) { // uniform result from varying input
-			return // ERROR: varying context due to varying input
+			return // ALLOWED: uniform context as reduce.Any produces uniform result and no mask alteration earlier
 		}
 		
 		// Pure uniform condition with reduce - should be OK
-		uniformCondition := true
 		if reduce.All(uniformCondition) {
 			return // OK: pure uniform condition
 		}
@@ -189,7 +187,7 @@ func testFunctionCallConditions() {
 		}
 		
 		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
-		if isNegative(data[i]) { // function taking varying input
+		if isNegative(data[i]) { // function taking varying input and returning varying result
 			return // ERROR: varying condition
 		}
 		
@@ -337,7 +335,7 @@ func isShutdownRequested() uniform bool {
 	return false
 }
 
-func isNegative(x int) bool {
+func isNegative(x varying int) varying bool {
 	return x < 0
 }
 

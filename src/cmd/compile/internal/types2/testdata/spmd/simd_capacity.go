@@ -10,7 +10,7 @@ func testGoForCapacityConstraints() {
 	// Valid: capacity matches typical SIMD width
 	go for i := range 16 {
 		var data varying int32   // Should fit in SIMD128 (4 lanes)
-		process(int(data))
+		process(data)
 		_ = i
 	}
 	
@@ -18,7 +18,7 @@ func testGoForCapacityConstraints() {
 	go for i := range 8 {
 		var a varying int32      // 4 bytes * 4 lanes = 16 bytes
 		var b varying float32    // 4 bytes * 4 lanes = 16 bytes
-		process(int(a + varying int32(b)))
+		process(a + varying int32(b))
 		_ = i
 	}
 	
@@ -26,14 +26,14 @@ func testGoForCapacityConstraints() {
 	go for i := range 32 {
 		var a varying int64      // 8 bytes * 4 lanes = 32 bytes (over SIMD128)
 		var b varying int64      // 8 bytes * 4 lanes = 32 bytes (total 64 bytes)
-		process(int(a + b))
+		process(a + b)
 		_ = i
 	}
 	
 	// ERROR "SIMD register capacity exceeded"
 	go for i := range 16 {
 		var data [8]varying float64  // 8*8*4 = 256 bytes (way over limit)
-		process(int(data[0]))
+		process(data)
 		_ = i
 	}
 }
@@ -75,32 +75,32 @@ func invalidLargeFunc(a varying [16]int64, b varying [16]float64) varying int64 
 func testConstrainedVaryingCapacity() {
 	// Valid: constraint within capacity
 	var data varying[4] int32     // 4 elements * 4 bytes = 16 bytes
-	process(int(data[0]))
-	
+	process(data)
+
 	// Valid: smaller constraint
 	var small varying[2] int64    // 2 elements * 8 bytes = 16 bytes
-	process(int(small[0]))
-	
+	process(small)
+
 	// ERROR "constrained varying capacity exceeded"
 	var large varying[32] int32   // 32 elements * 4 bytes = 128 bytes
-	process(int(large[0]))
-	
+	process(large)
+
 	// ERROR "constrained varying capacity exceeded"
 	var huge varying[8] int64     // 8 elements * 8 bytes = 64 bytes
-	process(int(huge[0]))
+	process(huge)
 }
 
 // Test mixed capacity scenarios
 func testMixedCapacityScenarios() {
-	go for i := range 16 {
+	go for i := range[16] 16 {
 		// Valid: careful capacity management
 		var small varying int8       // 1 byte * 16 lanes = 16 bytes (max for SIMD128)
-		process(int(small))
-		
+		process(small)
+
 		// ERROR "SIMD register capacity exceeded"
 		var medium varying int16     // 2 bytes * 16 lanes = 32 bytes (over limit)
 		var large varying int32      // 4 bytes * 16 lanes = 64 bytes (way over)
-		process(int(medium + varying int16(large)))
+		process(medium + varying int16(large))
 		
 		_ = i
 	}
@@ -114,13 +114,13 @@ func testLanesCountCapacity() {
 		var data varying int32   // lanes.Count() * 4 bytes (e.g., 4 * 4 = 16 bytes)
 		laneCount := lanes.Count(data)
 		if laneCount > 0 {
-			process(int(data))
+			process(data)
 		}
 		_ = i
 	}
 }
 
 // Helper function
-func process(x int) {
+func process(x varying[] int) {
 	_ = x
 }

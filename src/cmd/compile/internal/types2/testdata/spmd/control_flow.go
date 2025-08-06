@@ -311,7 +311,7 @@ func testSPMDConditionalReturns(data varying int, threshold uniform int) varying
 		return data * 2 // ERROR: varying condition in SPMD function
 	}
 	
-	// Reduction produces uniform result but input is varying - still varying context
+	// Reduction produces uniform result even if input is varying as return and function call will have the same mask, we are ok in this case
 	if reduce.Any(data > 10) {
 		return data / 2  // OK: uniform result from reduce operation
 	}
@@ -343,7 +343,7 @@ func testReduceOperationEdgeCases() {
 		}		
 		
 		// Pure uniform condition with reduce is OK
-		uniformCondition := true
+		uniformCondition := uniform bool(true)
 		if reduce.All(uniformCondition) {
 			return // OK: pure uniform condition
 		}

@@ -36,7 +36,7 @@ func testVaryingPointerArithmetic() {
 	go for i := range 8 {
 		// Valid: pointer arithmetic with varying offset
 		vOffset := varying uintptr(i)
-		vPtr := (*int)(unsafe.Add(unsafe.Pointer(basePtr), vOffset*unsafe.Sizeof(int(0))))
+		vPtr := (*int)(unsafe.Add(unsafe.Pointer(basePtr), vOffset*unsafe.Sizeof(int(i))))
 		value := *vPtr
 		process(value)
 	}
