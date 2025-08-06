@@ -1,4 +1,4 @@
-// run -goexperiment spmd
+//go:build goexperiment.spmd
 
 // Simple sum operation using SPMD Go
 // From: go-data-parallelism.md

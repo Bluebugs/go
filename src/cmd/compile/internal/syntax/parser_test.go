@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"internal/buildcfg"
 	"internal/testenv"
 	"os"
 	"path/filepath"
@@ -25,6 +26,20 @@ var (
 	src_   = flag.String("src", "parser.go", "source file to parse")
 	skip   = flag.String("skip", "", "files matching this regular expression are skipped by TestStdLib")
 )
+
+// setGOEXPERIMENT overwrites the existing buildcfg.Experiment with a new one
+// based on the provided goexperiment string. Calling the result function
+// (typically via defer), reverts buildcfg.Experiment to the prior value.
+// For testing use, only.
+func setGOEXPERIMENT(goexperiment string) func() {
+	exp, err := buildcfg.ParseGOEXPERIMENT(runtime.GOOS, runtime.GOARCH, goexperiment)
+	if err != nil {
+		panic(err)
+	}
+	old := buildcfg.Experiment
+	buildcfg.Experiment = *exp
+	return func() { buildcfg.Experiment = old }
+}
 
 func TestParse(t *testing.T) {
 	ParseFile(*src_, func(err error) { t.Error(err) }, nil, 0)
@@ -461,11 +476,16 @@ func testFileWithSPMD(t *testing.T, filename string, spmdEnabled bool) {
 
 	expectedErrors := CommentMap(strings.NewReader(string(src)), regexp.MustCompile("^ ERROR "))
 
+	// Set GOEXPERIMENT based on spmdEnabled parameter
+	var revert func()
+	if spmdEnabled {
+		revert = setGOEXPERIMENT("spmd")
+	} else {
+		revert = setGOEXPERIMENT("")
+	}
+	defer revert()
+
 	// Parse the file
-	// Note: In a real implementation, we would need to set GOEXPERIMENT here
-	// For now, we'll parse without experiment support since the lexer/parser
-	// extensions haven't been implemented yet
-	
 	var errors []Error
 	_, parseErr := ParseFile(filename, func(err error) {
 		if syntaxErr, ok := err.(Error); ok {

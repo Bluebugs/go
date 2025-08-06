@@ -1,3 +1,5 @@
+//go:build goexperiment.spmd
+
 // Odd/even processing demonstrating if statements in SPMD Go
 // From: go-data-parallelism.md
 package main

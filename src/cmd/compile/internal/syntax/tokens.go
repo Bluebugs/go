@@ -68,6 +68,10 @@ const (
 	_Type        // type
 	_Var         // var
 
+	// SPMD keywords (only available with GOEXPERIMENT=spmd)
+	_Uniform     // uniform
+	_Varying     // varying
+
 	// empty line comment to exclude it from .String
 	tokenCount //
 )
