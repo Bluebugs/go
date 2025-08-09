@@ -406,6 +406,11 @@ func (x *operand) assignableTo(check *Checker, T Type, cause *string) (bool, Cod
 		}
 	}
 
+	// SPMD type assignability rules
+	if handled, assignable, code := x.handleSPMDAssignability(V, T, cause); handled {
+		return assignable, code
+	}
+
 	// optimization: if we don't have type parameters, we're done
 	if Vp == nil && Tp == nil {
 		return false, IncompatibleAssign
