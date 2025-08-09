@@ -10,6 +10,14 @@ package types2
 
 import . "internal/types/errors"
 
+// isEmptyInterface reports whether T is interface{}
+func isEmptyInterface(T Type) bool {
+	if iface, ok := T.(*Interface); ok {
+		return iface.Empty()
+	}
+	return false
+}
+
 // handleSPMDAssignability handles SPMD type assignability rules.
 // Returns (handled, assignable, errorCode) where:
 // - handled: true if SPMD types were involved in the check
@@ -77,7 +85,20 @@ func (x *operand) checkSPMDtoSPMDAssignability(vSPMD, tSPMD *SPMDType, cause *st
 		return true // uniform int can be assigned to varying int (broadcast)
 	}
 
-	// Rule 4: Varying to uniform is prohibited
+	// Rule 4: Interface assignment support
+	// Any SPMD type can be assigned to varying interface{} 
+	if tSPMD.qualifier == VaryingQualifier && isEmptyInterface(tSPMD.elem) {
+		return true // varying int can be assigned to varying interface{}
+	}
+	
+	// uniform T can be assigned to uniform interface{}
+	if vSPMD.qualifier == UniformQualifier && 
+	   tSPMD.qualifier == UniformQualifier && 
+	   isEmptyInterface(tSPMD.elem) {
+		return true // uniform int can be assigned to uniform interface{}
+	}
+
+	// Rule 5: Varying to uniform is prohibited
 	if vSPMD.qualifier == VaryingQualifier && tSPMD.qualifier == UniformQualifier {
 		if cause != nil {
 			*cause = "cannot assign varying expression to uniform variable"
@@ -94,12 +115,17 @@ func (x *operand) checkSPMDtoSPMDAssignability(vSPMD, tSPMD *SPMDType, cause *st
 
 // checkSPMDToRegularAssignability checks assignability from SPMD type to regular Go type
 func (x *operand) checkSPMDToRegularAssignability(vSPMD *SPMDType, T Type, cause *string) bool {
+	// Handle interface{} assignment - both uniform and varying can be assigned to interface{}
+	if isEmptyInterface(T) {
+		return true // Both uniform and varying types can be assigned to interface{}
+	}
+
 	// Only uniform types can be assigned to regular Go types
 	if vSPMD.qualifier == UniformQualifier && Identical(vSPMD.elem, T) {
 		return true
 	}
 
-	// Varying types cannot be assigned to regular Go types
+	// Varying types cannot be assigned to regular Go types (except interface{})
 	if vSPMD.qualifier == VaryingQualifier {
 		if cause != nil {
 			*cause = "cannot assign varying expression to non-SPMD variable"

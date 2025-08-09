@@ -383,7 +383,13 @@ func (check *Checker) typInternal(e0 syntax.Expr, def *TypeName) (T Type) {
 		typ.elem = check.varType(e.Elem)
 		return typ
 
+
 	default:
+		// Try SPMD type handling first
+		if t, handled := check.handleSPMDTypeExpr(e0, def); handled {
+			return t
+		}
+		
 		check.errorf(e0, NotAType, "%s is not a type", e0)
 		check.use(e0)
 	}

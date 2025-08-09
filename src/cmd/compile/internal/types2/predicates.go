@@ -491,6 +491,11 @@ func (c *comparer) identical(x, y Type, p *ifacePair) bool {
 		// avoid a crash in case of nil type
 
 	default:
+		// Try SPMD type handling
+		if handled, identical := c.handleSPMDTypeIdentical(x, y, p); handled {
+			return identical
+		}
+		
 		panic("unreachable")
 	}
 

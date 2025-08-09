@@ -1482,4 +1482,11 @@ const (
 	// errors. The solution is to rebuild the application with a
 	// newer Go release.
 	TooNew
+
+	// InvalidSPMDType occurs when an invalid SPMD type construct is used,
+	// such as a pointer to a varying type.
+	//
+	// Example:
+	//  var _ *varying int  // pointer to varying type not supported
+	InvalidSPMDType
 )
