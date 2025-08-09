@@ -500,13 +500,36 @@ func testFileWithSPMD(t *testing.T, filename string, spmdEnabled bool) {
 		}
 	}
 
-	// For now, we expect parsing to fail for SPMD files since the syntax
-	// extensions haven't been implemented yet
-	if spmdEnabled && strings.Contains(string(src), "varying") {
-		if len(errors) == 0 {
-			t.Errorf("Expected parsing errors for SPMD syntax, but got none")
+	// Update: Basic SPMD syntax is now implemented in Phase 1.3
+	// Check if this is a file with implemented SPMD syntax that should parse successfully
+	baseName := filepath.Base(filename)
+	implementedFiles := []string{"simple_sum.go", "odd_even.go"}
+	
+	isImplemented := false
+	for _, impl := range implementedFiles {
+		if baseName == impl {
+			isImplemented = true
+			break
+		}
+	}
+	
+	if spmdEnabled && isImplemented {
+		// These files should now parse successfully
+		if len(errors) > 0 {
+			t.Errorf("Expected successful parsing for implemented SPMD syntax, but got %d errors:", len(errors))
+			for _, err := range errors {
+				t.Errorf("  %v", err)
+			}
 		} else {
-			t.Logf("Got expected parsing errors for unimplemented SPMD syntax: %d errors", len(errors))
+			t.Logf("Successfully parsed implemented SPMD syntax")
+		}
+		return
+	} else if spmdEnabled && strings.Contains(string(src), "varying") {
+		// Other SPMD files may still have unimplemented syntax
+		if len(errors) == 0 {
+			t.Logf("Unexpectedly parsed SPMD syntax successfully - this may indicate more features are working!")
+		} else {
+			t.Logf("Got expected parsing errors for partially implemented SPMD syntax: %d errors", len(errors))
 		}
 		return
 	}

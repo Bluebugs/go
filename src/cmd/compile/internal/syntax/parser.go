@@ -7,6 +7,7 @@ package syntax
 import (
 	"fmt"
 	"go/build/constraint"
+	"internal/buildcfg"
 	"io"
 	"strconv"
 	"strings"
@@ -1407,6 +1408,14 @@ func (p *parser) typeOrNil() Expr {
 	case _Interface:
 		return p.interfaceType()
 
+	case _Uniform, _Varying:
+		// SPMD qualified types (uniform/varying) when experiment is enabled
+		if buildcfg.Experiment.SPMD {
+			return p.spmdType()
+		}
+		// Fall through to _Name case when SPMD disabled
+		fallthrough
+
 	case _Name:
 		return p.qualifiedName(nil)
 
@@ -1572,6 +1581,37 @@ func (p *parser) interfaceType() *InterfaceType {
 		return false
 	})
 
+	return typ
+}
+
+// spmdType parses SPMD qualified types: uniform Type, varying Type, varying[n] Type, varying[] Type
+// Only available when GOEXPERIMENT=spmd is enabled
+func (p *parser) spmdType() *SPMDType {
+	if trace {
+		defer p.trace("spmdType")()
+	}
+
+	typ := new(SPMDType)
+	typ.pos = p.pos()
+	typ.Qualifier = p.tok // _Uniform or _Varying
+	
+	p.next() // consume qualifier token
+
+	// Handle constraint for varying types: varying[n] or varying[]
+	if typ.Qualifier == _Varying && p.got(_Lbrack) {
+		if p.got(_Rbrack) {
+			// varying[] - universal constraint (empty brackets)
+			// Leave typ.Constraint as nil to represent universal constraint
+		} else {
+			// varying[n] - numeric constraint
+			typ.Constraint = p.expr() 
+			p.want(_Rbrack)
+		}
+	}
+
+	// Parse the underlying type
+	typ.Elem = p.type_()
+	
 	return typ
 }
 
@@ -2246,6 +2286,31 @@ func (p *parser) newRangeClause(lhs Expr, def bool) *RangeClause {
 	return r
 }
 
+// spmdRangeClause parses SPMD range clauses with optional constraints: range[n] expr
+// Only available when GOEXPERIMENT=spmd is enabled
+func (p *parser) spmdRangeClause() *RangeClause {
+	r := new(RangeClause)
+	r.pos = p.pos()
+	
+	p.next() // consume _Range
+	
+	// Check for constraint: range[n] expr
+	if p.got(_Lbrack) {
+		if p.got(_Rbrack) {
+			// range[] expr - universal constraint (empty brackets)
+			// Leave r.Constraint as nil to represent universal constraint
+		} else {
+			// range[n] expr - numeric constraint
+			r.Constraint = p.expr()
+			p.want(_Rbrack)
+		}
+	}
+	
+	// Parse the range expression
+	r.X = p.expr()
+	return r
+}
+
 func (p *parser) newAssignStmt(pos Pos, op Operator, lhs, rhs Expr) *AssignStmt {
 	a := new(AssignStmt)
 	a.pos = pos
@@ -2337,6 +2402,24 @@ func (p *parser) forStmt() Stmt {
 
 	s.Init, s.Cond, s.Post = p.header(_For)
 	s.Body = p.blockStmt("for clause")
+
+	return s
+}
+
+// spmdForStmt parses SPMD "go for" loops: go for range[constraint] expr, go for range expr, etc.
+// Only available when GOEXPERIMENT=spmd is enabled
+func (p *parser) spmdForStmt(goPos Pos) Stmt {
+	if trace {
+		defer p.trace("spmdForStmt")()
+	}
+
+	s := new(ForStmt)
+	s.pos = goPos  // position of the 'go' token
+	s.IsSpmd = true // Mark as SPMD loop
+
+	// Parse the for loop structure (we've already consumed 'go', now expect 'for')
+	s.Init, s.Cond, s.Post = p.spmdHeader(_For)
+	s.Body = p.blockStmt("SPMD for clause")
 
 	return s
 }
@@ -2438,6 +2521,51 @@ done:
 			str = String(s)
 		}
 		p.syntaxErrorAt(s.Pos(), fmt.Sprintf("cannot use %s as value", str))
+	}
+
+	p.xnest = outer
+	return
+}
+
+// spmdHeader parses SPMD for loop headers, handling constrained range syntax: range[n] expr
+// Only available when GOEXPERIMENT=spmd is enabled
+func (p *parser) spmdHeader(keyword token) (init SimpleStmt, cond Expr, post SimpleStmt) {
+	p.want(keyword)
+
+	if p.tok == _Lbrace {
+		// Infinite SPMD loop: go for { ... }
+		return
+	}
+
+	outer := p.xnest
+	p.xnest = -1
+
+	if p.tok != _Semi {
+		// Check for SPMD range clause with optional constraint: range[n] expr
+		if p.tok == _Range {
+			init = p.spmdRangeClause()
+			p.xnest = outer
+			return
+		}
+		
+		// Regular for loop syntax in SPMD context
+		init = p.simpleStmt(nil, keyword)
+		if _, ok := init.(*RangeClause); ok {
+			p.xnest = outer
+			return
+		}
+	}
+
+	// Handle condition and post statement (same as regular for loop)
+	if p.tok != _Lbrace && p.tok == _Semi {
+		p.next()
+		if p.tok != _Semi {
+			cond = p.expr()
+		}
+		p.want(_Semi)
+		if p.tok != _Lbrace {
+			post = p.simpleStmt(nil, 0)
+		}
 	}
 
 	p.xnest = outer
@@ -2673,6 +2801,40 @@ func (p *parser) stmtOrNil() Stmt {
 		return s
 
 	case _Go, _Defer:
+		// Check for SPMD "go for" syntax when GOEXPERIMENT=spmd enabled
+		if p.tok == _Go && buildcfg.Experiment.SPMD {
+			// Save the current position
+			pos := p.pos()
+			p.next() // consume 'go'
+			
+			if p.tok == _For {
+				// This is a SPMD "go for" loop
+				s := new(ForStmt)
+				s.pos = pos // use 'go' position
+				s.IsSpmd = true
+				
+				// Parse the for loop structure (we're now at 'for')
+				s.Init, s.Cond, s.Post = p.spmdHeader(_For)
+				s.Body = p.blockStmt("SPMD for clause")
+				
+				return s
+			} else {
+				// Not "go for" - this is "go func(...)" 
+				// We've already consumed 'go', so we need to create a CallStmt manually
+				s := new(CallStmt)
+				s.pos = pos // use 'go' position  
+				s.Tok = _Go
+				
+				x := p.pexpr(nil, p.tok == _Lparen)
+				if t := Unparen(x); t != x {
+					p.errorAt(x.Pos(), fmt.Sprintf("expression in %s must not be parenthesized", s.Tok))
+					x = t
+				}
+				s.Call = x
+				return s
+			}
+		}
+		// Regular case (defer or go when SPMD disabled)
 		return p.callStmt()
 
 	case _Goto:

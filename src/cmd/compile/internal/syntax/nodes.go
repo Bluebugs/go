@@ -310,6 +310,14 @@ type (
 		Elem Expr
 		expr
 	}
+
+	// SPMD qualified types: uniform Type, varying Type, varying[n] Type, varying[] Type
+	SPMDType struct {
+		Qualifier token // _Uniform or _Varying
+		Constraint Expr // nil (no constraint), numeric literal, or empty ([]) for universal
+		Elem Expr       // underlying type
+		expr
+	}
 )
 
 type expr struct {
@@ -415,6 +423,7 @@ type (
 		Cond Expr
 		Post SimpleStmt
 		Body *BlockStmt
+		IsSpmd bool // true for "go for" loops
 		stmt
 	}
 
@@ -438,6 +447,7 @@ type (
 		Lhs Expr // nil means no Lhs = or Lhs :=
 		Def bool // means :=
 		X   Expr // range X
+		Constraint Expr // constraint for SPMD "range[n]" - nil means no constraint
 		simpleStmt
 	}
 
