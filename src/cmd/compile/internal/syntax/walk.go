@@ -309,6 +309,10 @@ func (w walker) node(n Node) {
 		w.stmtList(n.Body)
 
 	default:
+		// Try SPMD-specific node types if SPMD experiment is enabled
+		if w.handleSPMDNode(n) {
+			break
+		}
 		panic(fmt.Sprintf("internal error: unknown node type %T", n))
 	}
 
