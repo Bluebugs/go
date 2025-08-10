@@ -395,10 +395,12 @@ func TestLocal(t *testing.T) { testDirFiles(t, "testdata/local", 0, false) }
 
 // TestSPMDTypeChecking tests the type checking rules for SPMD constructs
 func TestSPMDTypeChecking(t *testing.T) {
-	if !buildcfg.Experiment.SPMD {
-		t.Skip("SPMD experiment not enabled")
-	}
-	
+	old := buildcfg.Experiment.SPMD
+	defer func() {
+		buildcfg.Experiment.SPMD = old
+	}()
+	buildcfg.Experiment.SPMD = true
+
 	testDirFiles(t, "testdata/spmd", 0, false)
 }
 
