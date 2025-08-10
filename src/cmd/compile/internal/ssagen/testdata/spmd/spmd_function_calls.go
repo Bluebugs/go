@@ -11,7 +11,7 @@ func testSPMDFunctionCallSSA() {
 	
 	// Call to SPMD function should insert mask as first parameter
 	result := spmdMultiply(data, varying int32(2))
-	process(int(result))
+	process(result)
 }
 
 // SPMD function that should receive mask as first parameter
@@ -26,11 +26,9 @@ func testSPMDCallFromGoForSSA() {
 	// EXPECT SSA: OpCall (with current loop mask passed)
 	// EXPECT SSA: OpAnd (for combining loop mask with call mask)
 	go for i := range 8 {
-		var data varying int32 = varying int32(i)
-		
 		// Mask from go for should be passed to SPMD function
-		result := spmdProcess(data)
-		process(int(result))
+		result := spmdProcess(i)
+		process(result)
 	}
 }
 
@@ -43,18 +41,17 @@ func spmdProcess(value varying int32) varying int32 {
 func testConditionalSPMDCallSSA() {
 	// EXPECT SSA: OpAnd (for combining condition mask with call mask)
 	// EXPECT SSA: OpSelect (for conditional call execution)
-	var data varying int32 = 100
-	var condition varying bool = data > varying int32(50)
+	go for data := range 100 {	
+		var result varying int32
+		if data > 50 {
+			// Call should be predicated with condition mask
+			result = spmdDouble(data)
+		} else {
+			result = data
+		}
 	
-	var result varying int32
-	if condition {
-		// Call should be predicated with condition mask
-		result = spmdDouble(data)
-	} else {
-		result = data
+		process(result)
 	}
-	
-	process(int(result))
 }
 
 func spmdDouble(value varying int32) varying int32 {
@@ -70,7 +67,7 @@ func testMultiParameterSPMDCallSSA() {
 	var c varying float32 = 3.14
 	
 	result := complexSPMDFunc(a, b, c)
-	process(int(result))
+	process(result)
 }
 
 func complexSPMDFunc(x varying int32, y varying int32, z varying float32) varying int32 {
@@ -86,22 +83,22 @@ func testChainedSPMDCallsSSA() {
 	var data varying int32 = 5
 	
 	result := spmdLevel1(data)
-	process(int(result))
+	process(result)
 }
 
 func spmdLevel1(value varying int32) varying int32 {
 	// EXPECT SSA: OpCall (passing through received mask)
-	return spmdLevel2(value * varying int32(2))
+	return spmdLevel2(value * 2)
 }
 
 func spmdLevel2(value varying int32) varying int32 {
 	// EXPECT SSA: OpCall (passing through received mask) 
-	return spmdLevel3(value + varying int32(10))
+	return spmdLevel3(value + 10)
 }
 
 func spmdLevel3(value varying int32) varying int32 {
 	// EXPECT SSA: all operations use received mask
-	return value / varying int32(3)
+	return value / 3
 }
 
 // Test SPMD function with early return
@@ -110,17 +107,17 @@ func testSPMDEarlyReturnSSA() {
 	var data varying int32 = 25
 	
 	result := spmdConditionalReturn(data)
-	process(int(result))
+	process(result)
 }
 
 func spmdConditionalReturn(value varying int32) varying int32 {
 	// EXPECT SSA: OpAnd (for combining mask with condition)
 	// EXPECT SSA: OpSelect (for masked return)
-	if reduce.All(value > varying int32(20)) {
+	if reduce.All(value > 20) {
 		// Early return should respect mask
-		return value * varying int32(2)
+		return value * 2
 	}
-	return value + varying int32(1)
+	return value + 1
 }
 
 // Test non-SPMD function calling SPMD function 
@@ -131,15 +128,15 @@ func testNonSPMDToSPMDCallSSA() {
 	// Non-SPMD function should create initial mask for SPMD call
 	var varyingData varying int32 = varying int32(uniformData)
 	result := spmdFromNonSPMD(varyingData)
-	process(int(result))
+	process(result)
 }
 
 func spmdFromNonSPMD(value varying int32) varying int32 {
 	// EXPECT SSA: receives mask from non-SPMD caller (all lanes active)
-	return value * varying int32(3)
+	return value * 3
 }
 
 // Helper function
-func process(x int) {
+func process(x varying int) {
 	_ = x
 }

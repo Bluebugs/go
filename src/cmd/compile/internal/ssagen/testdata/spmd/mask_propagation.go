@@ -9,45 +9,47 @@ import "reduce"
 func testBasicMaskPropagationSSA() {
 	// EXPECT SSA: OpAnd (for mask intersection with condition)
 	// EXPECT SSA: OpSelect (for conditional execution)
-	var data varying int32 = 42
-	var condition varying bool = data > varying int32(20)
+	go for i := range 42 {
+		var condition varying bool = i > 20
 	
-	var result varying int32
-	if condition {
-		// EXPECT SSA: operations masked with condition
-		result = data * varying int32(2)
-	} else {
-		// EXPECT SSA: operations masked with negated condition
-		result = data + varying int32(10)
+		var result varying int32
+		if condition {
+			// EXPECT SSA: operations masked with condition
+			result = i * 2
+		} else {
+			// EXPECT SSA: operations masked with negated condition
+			result = data + 10
+		}
+
+		process(result)
 	}
-	
-	process(int(result))
 }
 
 // Test nested conditional mask propagation
 func testNestedMaskPropagationSSA() {
 	// EXPECT SSA: multiple OpAnd for nested mask combinations
 	// EXPECT SSA: OpNot (for condition negation)
-	var data varying int32 = 30
-	var outer varying bool = data > varying int32(10)
-	var inner varying bool = data < varying int32(50)
+	go for data := range 60 {
+		var outer varying bool = data > 10
+		var inner varying bool = data < 50
 	
-	var result varying int32 = data
-	if outer {
-		// EXPECT SSA: mask = currentMask & outer
-		if inner {
-			// EXPECT SSA: mask = currentMask & outer & inner
-			result = data * varying int32(3)
+		var result varying int32 = data
+		if outer {
+			// EXPECT SSA: mask = currentMask & outer
+			if inner {
+				// EXPECT SSA: mask = currentMask & outer & inner
+				result = data * varying int32(3)
+			} else {
+				// EXPECT SSA: mask = currentMask & outer & !inner
+				result = data * varying int32(2)
+			}
 		} else {
-			// EXPECT SSA: mask = currentMask & outer & !inner
-			result = data * varying int32(2)
+			// EXPECT SSA: mask = currentMask & !outer
+			result = data + varying int32(5)
 		}
-	} else {
-		// EXPECT SSA: mask = currentMask & !outer
-		result = data + varying int32(5)
-	}
 	
-	process(int(result))
+		process(result)
+	}
 }
 
 // Test switch statement mask propagation
@@ -55,23 +57,24 @@ func testSwitchMaskPropagationSSA() {
 	// EXPECT SSA: OpEq (for case comparisons)
 	// EXPECT SSA: OpOr (for combining case masks)
 	// EXPECT SSA: OpSelect (for case execution)
-	var data varying int32 = 15
-	var selector varying int32 = data % varying int32(3)
+	go for data := range 30 {
+		var selector varying int32 = data % 3
 	
-	var result varying int32
-	switch selector {
-	case varying int32(0):
-		// EXPECT SSA: mask = currentMask & (selector == 0)
-		result = data * varying int32(10)
-	case varying int32(1):
-		// EXPECT SSA: mask = currentMask & (selector == 1)
-		result = data * varying int32(20)
-	default:
-		// EXPECT SSA: mask = currentMask & !(selector == 0 || selector == 1)
-		result = data * varying int32(30)
+		var result varying int32
+		switch selector {
+		case 0:
+			// EXPECT SSA: mask = currentMask & (selector == 0)
+			result = data * 10
+		case 1:
+			// EXPECT SSA: mask = currentMask & (selector == 1)
+			result = data * 20
+		default:
+			// EXPECT SSA: mask = currentMask & !(selector == 0 || selector == 1)
+			result = data * 30
+		}
+	
+		process(result)
 	}
-	
-	process(int(result))
 }
 
 // Test for loop with continue mask propagation
@@ -79,17 +82,17 @@ func testForLoopMaskPropagationSSA() {
 	// EXPECT SSA: OpPhi (for continue mask tracking)
 	// EXPECT SSA: OpOr (for accumulating continue conditions)
 	// EXPECT SSA: OpAndNot (for excluding continued lanes)
-	for i := 0; i < 10; i++ {
-		var condition varying bool = varying int32(i)%varying int32(2) == varying int32(0)
+	go for data := range 30 {
+		for i := 0; i < 10; i++ {
+			if i%2 == 0 {
+				// EXPECT SSA: continue mask updated
+				continue
+			}
 		
-		if condition {
-			// EXPECT SSA: continue mask updated
-			continue
+			// EXPECT SSA: operations executed with !continue mask
+			var dt varying int32 = data + i * 5
+			process(dt)
 		}
-		
-		// EXPECT SSA: operations executed with !continue mask
-		var data varying int32 = varying int32(i) * varying int32(5)
-		process(int(data))
 	}
 }
 
@@ -105,9 +108,9 @@ func testReduceMaskPropagationSSA() {
 		// EXPECT SSA: uniform branch, no mask needed
 		process(100)
 	} else if reduce.Any(condition) {
-		// EXPECT SSA: mixed execution, varying operations still masked
+		// EXPECT SSA: uniform branch, no mask needed
 		var result varying int32 = data * varying int32(2)
-		process(int(result))
+		process(result)
 	} else {
 		// EXPECT SSA: uniform branch, no mask needed
 		process(0)
@@ -127,13 +130,13 @@ func testGoForMaskPropagationSSA() {
 		if combinedCond {
 			// EXPECT SSA: mask = loopMask & combinedCond
 			var data varying int32 = varying int32(i) * varying int32(3)
-			process(int(data))
+			process(data)
 		}
 		
 		if condition1 {
 			// EXPECT SSA: mask = loopMask & condition1
 			var other varying int32 = varying int32(i) + varying int32(10)
-			process(int(other))
+			process(other)
 		}
 	}
 }
@@ -141,24 +144,25 @@ func testGoForMaskPropagationSSA() {
 // Test mask propagation with function calls
 func testFunctionCallMaskPropagationSSA() {
 	// EXPECT SSA: OpCall (with current mask passed to SPMD functions)
-	var data varying int32 = 35
-	var condition varying bool = data > varying int32(30)
+	go for data := range 50 {
+		var condition varying bool = data > 30
 	
-	if condition {
-		// EXPECT SSA: SPMD call with condition mask
-		result := maskedSPMDFunction(data)
-		process(int(result))
+		if condition {
+			// EXPECT SSA: SPMD call with condition mask
+			result := maskedSPMDFunction(data)
+			process(result)
+		}
+	
+		// EXPECT SSA: SPMD call with full mask
+		result2 := maskedSPMDFunction(data)
+		process(result2)
 	}
-	
-	// EXPECT SSA: SPMD call with full mask
-	result2 := maskedSPMDFunction(data)
-	process(int(result2))
 }
 
 func maskedSPMDFunction(value varying int32) varying int32 {
 	// EXPECT SSA: function receives mask parameter
 	// EXPECT SSA: all operations use received mask
-	return value * varying int32(4) + varying int32(7)
+	return value * 4 + 7
 }
 
 // Test mask propagation with early exit conditions
@@ -166,18 +170,19 @@ func testEarlyExitMaskPropagationSSA() {
 	// EXPECT SSA: OpAnd (for break condition mask)
 	// EXPECT SSA: OpOr (for accumulated exit mask)
 	var counter varying int32 = 0
-	
-	for i := 0; i < 20; i++ {
-		counter = counter + varying int32(1)
+
+	go for counter := range 42 {
+		for i := 0; i < 20; i++ {
+			counter = counter + 1
 		
-		// Varying break condition
-		var shouldBreak varying bool = counter > varying int32(10)
-		if reduce.Any(shouldBreak) {
-			// EXPECT SSA: partial lane exit
-			break
+			// Varying break condition
+			if counter > 10 {
+				// EXPECT SSA: partial lane exit
+				break
+			}
+		
+			process(counter)
 		}
-		
-		process(int(counter))
 	}
 }
 
@@ -196,17 +201,17 @@ func testSelectMaskPropagationSSA() {
 		// EXPECT SSA: uniform operations don't need masking
 		uniformResult := val * 2
 		
-		// EXPECT SSA: varying operations use current mask
+		// EXPECT SSA: varying operations but in uniform context, all lanes on
 		varyingResult := data + varying int32(uniformResult)
-		process(int(varyingResult))
+		process(varyingResult)
 	default:
-		// EXPECT SSA: varying operations use current mask
+		// EXPECT SSA: varying operations in uniform context, all lanes on
 		defaultResult := data * varying int32(3)
-		process(int(defaultResult))
+		process(defaultResult)
 	}
 }
 
 // Helper function
-func process(x int) {
+func process(x varying int) {
 	_ = x
 }

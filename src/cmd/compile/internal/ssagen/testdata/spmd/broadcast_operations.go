@@ -17,7 +17,7 @@ func testAutomaticBroadcastSSA() {
 	var result2 varying int32 = varyingVal * uniformVal
 	var result3 varying int32 = uniformVal - varyingVal
 	
-	process(int(result + result2 + result3))
+	process(result + result2 + result3)
 }
 
 // Test explicit lanes.Broadcast calls
@@ -30,7 +30,7 @@ func testExplicitBroadcastSSA() {
 	var broadcasted varying int32 = lanes.Broadcast(uniformVal, 0)
 	var result varying int32 = broadcasted * varying int32(2)
 	
-	process(int(result))
+	process(result)
 }
 
 // Test broadcast with different lane targets
@@ -45,7 +45,7 @@ func testLaneBroadcastSSA() {
 	var broadcast2 varying int32 = lanes.Broadcast(varyingVal, 2) // Broadcast from lane 2
 	
 	var result varying int32 = broadcast0 + broadcast1 + broadcast2
-	process(int(result))
+	process(result)
 }
 
 // Test broadcast in conditional contexts
@@ -64,7 +64,7 @@ func testConditionalBroadcastSSA() {
 		result = varyingValue * varying int32(2)
 	}
 	
-	process(int(result))
+	process(result)
 }
 
 // Test broadcast with function parameters
@@ -75,7 +75,7 @@ func testParameterBroadcastSSA() {
 	
 	// Call SPMD function with mixed parameters
 	result := mixedParameterFunction(uniformVal, varyingVal)
-	process(int(result))
+	process(result)
 }
 
 func mixedParameterFunction(uniform uniform int32, varying varying int32) varying int32 {
@@ -93,7 +93,7 @@ func testGoForBroadcastSSA() {
 	go for i := range 8 {
 		// Uniform should be broadcasted within loop
 		var loopResult varying int32 = uniformBase + varying int32(i)
-		process(int(loopResult))
+		process(loopResult)
 	}
 }
 
@@ -108,35 +108,35 @@ func testBroadcastTypeConversionSSA() {
 	var converted varying float32 = varying float32(uniformInt) + varyingFloat
 	var result varying int32 = varying int32(converted)
 	
-	process(int(result))
+	process(result)
 }
 
 // Test broadcast with memory operations
 func testBroadcastMemoryOpsSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast)
 	// EXPECT SSA: OpVectorStore (for storing broadcasted values)
-	var data [16]int32
+	var data varying int32
 	var uniformValue uniform int32 = 999
 	
-	go for i := range 4 {
+	go for i := range data {
 		// Store broadcasted uniform to varying indices
 		data[i] = int32(uniformValue + varying int32(i))
 	}
 	
-	process(int(data[0]))
+	process(data)
 }
 
 // Test broadcast with reduction operations
 func testBroadcastWithReduceSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast and reduce.Add)
 	var uniformVal uniform int32 = 10
-	var varyingVal varying int32 = varying int32(lanes.Index()) * varying int32(5)
+	var varyingVal varying int32 = varying int32(lanes.Index()) * 5
 	
 	// Combine broadcast with reduction
 	var combined varying int32 = uniformVal + varyingVal
 	var sum uniform int32 = reduce.Add(combined)
 	
-	process(int(sum))
+	process(sum)
 }
 
 // Test nested broadcast operations
@@ -149,7 +149,7 @@ func testNestedBroadcastSSA() {
 	
 	// Nested operations with multiple broadcasts
 	var result varying int32 = (uniform1 + uniform2) * varyingVal + uniform1
-	process(int(result))
+	process(result)
 }
 
 // Test broadcast in complex expressions
@@ -163,10 +163,10 @@ func testComplexBroadcastExpressionSSA() {
 	
 	// Complex expression requiring multiple broadcasts
 	var result varying float32 = (varying float32(a) * b + varying float32(c)) / (d + varying float32(a))
-	process(int(result))
+	process(result)
 }
 
 // Helper function
-func process(x int) {
+func process(x varying int) {
 	_ = x
 }

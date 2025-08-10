@@ -10,15 +10,19 @@ func testBasicReduceSSA() {
 	// EXPECT SSA: OpCall (to reduce.Add)
 	// EXPECT SSA: OpCall (to reduce.All)
 	// EXPECT SSA: OpCall (to reduce.Any)
-	var data varying int32 = varying int32(lanes.Index()) + varying int32(10)
-	var condition varying bool = data > varying int32(15)
+	go for data := range 30 {
+		data = data + 10
+
+		sum := reduce.Add(data)
+
+		condition := data > 15
 	
-	var sum uniform int32 = reduce.Add(data)
-	var allTrue uniform bool = reduce.All(condition)
-	var anyTrue uniform bool = reduce.Any(condition)
+		allTrue := reduce.All(condition)
+		anyTrue := reduce.Any(condition)
 	
-	if allTrue || anyTrue {
-		process(int(sum))
+		if allTrue || anyTrue {
+			process(sum)
+		}
 	}
 }
 
@@ -42,35 +46,37 @@ func testNumericReduceSSA() {
 	var floatMin uniform float32 = reduce.Min(floatData)
 	var doubleMin uniform float64 = reduce.Min(doubleData)
 	
-	process(int(intSum + uniform int32(floatSum) + uniform int32(doubleSum)))
-	process(int(intMax + uniform int32(floatMax) + uniform int32(doubleMax)))
-	process(int(intMin + uniform int32(floatMin) + uniform int32(doubleMin)))
+	process(intSum + varying int32(floatSum) + varying int32(doubleSum)))
+	process(intMax + varying int32(floatMax) + varying int32(doubleMax)))
+	process(intMin + varying int32(floatMin) + varying int32(doubleMin)))
 }
 
 // Test bitwise reduce operations
 func testBitwiseReduceSSA() {
 	// EXPECT SSA: OpCall (to reduce.Or/And/Xor)
-	var data varying int32 = varying int32(0xFF) << varying int32(lanes.Index())
+	go for i := range 32 {
+		data := i << lanes.Index()
 	
-	var orResult uniform int32 = reduce.Or(data)
-	var andResult uniform int32 = reduce.And(data)
-	var xorResult uniform int32 = reduce.Xor(data)
+		orResult := reduce.Or(data)
+		andResult := reduce.And(data)
+		xorResult := reduce.Xor(data)
 	
-	process(int(orResult + andResult + xorResult))
+		process(orResult + andResult + xorResult)
+	}
 }
 
 // Test reduce.From for varying-to-array conversion
 func testReduceFromSSA() {
 	// EXPECT SSA: OpCall (to reduce.From)
 	// EXPECT SSA: array construction from varying values
-	var data varying int32 = varying int32(lanes.Index()) * varying int32(5)
+	var data varying int32 = 5
 	
 	// Convert varying to array
 	var array []int32 = reduce.From(data)
 	
 	// Use array elements
 	for i := 0; i < len(array); i++ {
-		process(int(array[i]))
+		_ := array[i]
 	}
 }
 
@@ -78,21 +84,25 @@ func testReduceFromSSA() {
 func testConditionalReduceSSA() {
 	// EXPECT SSA: OpCall (to reduce within conditions)
 	// EXPECT SSA: uniform control flow from reduce results
-	var data varying int32 = varying int32(lanes.Index()) + varying int32(20)
-	var condition varying bool = data > varying int32(22)
+	go for i := range 10 {
+		data := i + 20
+
+		condition := data > 22
 	
-	// Uniform control flow from reduce
-	if reduce.All(condition) {
-		// EXPECT SSA: uniform branch, no masking needed
-		var sum uniform int32 = reduce.Add(data)
-		process(int(sum))
-	} else if reduce.Any(condition) {
-		// EXPECT SSA: mixed execution, some lanes active
-		var max uniform int32 = reduce.Max(data)
-		process(int(max))
-	} else {
-		// EXPECT SSA: uniform branch, all lanes false
-		process(0)
+		// Uniform control flow from reduce
+		if reduce.All(condition) {
+			// EXPECT SSA: uniform branch, no masking needed
+			_ := reduce.Add(data)
+		} else if reduce.Any(condition) {
+			// EXPECT SSA: mixed execution, some lanes active
+			_ = reduce.Max(data)
+		} else if condition {
+			// EXPECT SSA: varying branch, never called, all lanes false
+			process(data)
+		} else {
+			// EXPECT SSA: varying brancj, fallback when condition false
+			process(data)
+		}
 	}
 }
 
@@ -100,14 +110,13 @@ func testConditionalReduceSSA() {
 func testReduceInGoForSSA() {
 	// EXPECT SSA: OpCall (to reduce within SPMD loop)
 	go for i := range 8 {
-		var loopData varying int32 = varying int32(i) * varying int32(3)
-		var loopCondition varying bool = loopData > varying int32(10)
+		var loopData varying int32 = i * 3
+		var loopCondition varying bool = loopData > 10
 		
 		// Early loop termination based on reduce
 		if reduce.All(loopCondition) {
 			// EXPECT SSA: uniform control flow affects loop
-			var sum uniform int32 = reduce.Add(loopData)
-			process(int(sum))
+			_ := reduce.Add(loopData)
 			continue
 		}
 		
@@ -115,9 +124,9 @@ func testReduceInGoForSSA() {
 		if reduce.Any(loopCondition) {
 			var filtered varying int32 = loopData
 			if loopCondition {
-				filtered = filtered * varying int32(2)
+				filtered = filtered * 2
 			}
-			process(int(filtered))
+			process(filtered)
 		}
 	}
 }
@@ -126,19 +135,16 @@ func testReduceInGoForSSA() {
 func testConstrainedVaryingReduceSSA() {
 	// EXPECT SSA: OpCall (to reduce with constrained varying)
 	// EXPECT SSA: array decomposition for constrained types
-	var constrainedData varying[4] int32
+	go for i := range[4] 20 {
+		constrainedData = i * 10
 	
-	// Initialize constrained data
-	for i := 0; i < 4; i++ {
-		constrainedData[i] = int32(i * 10)
-	}
+		// Reduce constrained varying
+		_ := reduce.Add(constrainedData)
+		allPositive := reduce.All(constrainedData > 0)
 	
-	// Reduce constrained varying
-	var sum uniform int32 = reduce.Add(constrainedData)
-	var allPositive uniform bool = reduce.All(constrainedData > varying int32(0))
-	
-	if allPositive {
-		process(int(sum))
+		if allPositive {
+			process(data)
+		}
 	}
 }
 
@@ -148,36 +154,35 @@ func testReduceWithFunctionCallsSSA() {
 	var data varying int32 = 15
 	
 	// Call SPMD function and reduce result
-	var processed varying int32 = processData(data)
-	var result uniform int32 = reduce.Add(processed)
-	
-	process(int(result))
+	processed := processData(data)
+	_ := reduce.Add(processed)
 }
 
 func processData(input varying int32) varying int32 {
 	// EXPECT SSA: function generates varying result for reduction
-	return input * varying int32(2) + varying int32(lanes.Index())
+	return input * 2 + lanes.Index()
 }
 
 // Test nested reduce operations
 func testNestedReduceSSA() {
 	// EXPECT SSA: multiple OpCall (to different reduce functions)
-	var data varying int32 = varying int32(lanes.Index()) + varying int32(5)
+	go for i := range 32 {
+		data := i + 5
 	
-	// Multiple reduce operations
-	var sum uniform int32 = reduce.Add(data)
-	var max uniform int32 = reduce.Max(data)
-	var hasPositive uniform bool = reduce.Any(data > varying int32(0))
+		// Multiple reduce operations
+		var sum uniform int32 = reduce.Add(data)
+		var max uniform int32 = reduce.Max(data)
 	
-	// Use reduce results in computation
-	var finalResult uniform int32
-	if hasPositive {
-		finalResult = sum + max
-	} else {
-		finalResult = 0
+		// Use reduce results in computation
+		var finalResult uniform int32
+		if reduce.Any(data > 0) {
+			finalResult = sum + max
+		} else {
+			finalResult = 0
+		}
+	
+		_ := finalResult
 	}
-	
-	process(int(finalResult))
 }
 
 // Test reduce with complex expressions
@@ -202,18 +207,17 @@ func testReduceMemoryAccessSSA() {
 	// EXPECT SSA: OpVectorLoad (for varying array access)
 	var data [16]int32
 	for i := 0; i < 16; i++ {
-		data[i] = int32(i * i)
+		data[i] = i * i
 	}
 	
 	go for i := range 4 {
 		// Load varying data and reduce
-		var loadedData varying int32 = varying int32(data[i*2])
-		var sum uniform int32 = reduce.Add(loadedData)
-		process(int(sum))
+		loadedData := data[i*2]
+		_ := reduce.Add(loadedData)
 	}
 }
 
 // Helper function
-func process(x int) {
+func process(x varying int) {
 	_ = x
 }
