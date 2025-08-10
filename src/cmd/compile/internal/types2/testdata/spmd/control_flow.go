@@ -28,27 +28,25 @@ func testGoForRestrictions() {
 		process(i)
 	}
 	
-	// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 	go for i := range 10 {
 		if i > 5 { // varying condition
-			break  // ERROR: varying condition forbids break
+			break  // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 		}
 		process(i)
 	}
 	
-	// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"  
 	go for i := range 10 {
 		if i < 3 { // varying condition
-			return // ERROR: varying condition forbids return
+			return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 		}
 		process(i)
 	}
 	
-	// ERROR "nested go for loops not allowed"
 	go for i := range 10 {
-		go for j := range 5 {
+		go for j := range 5 { // ERROR "nested `go for` loop (prohibited for now)"
 			process(i + j)
 		}
+		_ = i // use i to avoid "declared and not used" error
 	}
 }
 
@@ -57,7 +55,6 @@ func testMaskAlterationScenarios() {
 	threshold := 7
 	mode := uniform int(1)
 	
-	// ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 	go for i := range 10 {
 		if i > 5 { // varying condition
 			continue  // OK: continue always allowed, but alters mask
@@ -65,19 +62,18 @@ func testMaskAlterationScenarios() {
 		
 		// Mask has been altered by previous continue in varying context
 		if mode == 1 { // uniform condition, but mask is altered
-			return // ERROR: return forbidden due to mask alteration
+			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		}
 		process(i)
 	}
 	
-	// ERROR "break statement not allowed after continue in varying context in SPMD for loop"
 	go for i := range 10 {
 		if i < 3 { // varying condition
 			continue  // Alters mask
 		}
 		
 		if threshold > 0 { // uniform condition, but mask altered
-			break // ERROR: break forbidden due to mask alteration
+			break // ERROR "break statement not allowed after continue in varying context in SPMD for loop"
 		}
 		process(i)
 	}
@@ -90,9 +86,8 @@ func testMaskAlterationScenarios() {
 			}
 		}
 		
-		// ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		if mode > 0 { // uniform condition on remaining active lanes only
-			return // ERROR: uniform condition but altered mask
+			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		}
 		process(i)
 	}
@@ -140,14 +135,12 @@ func testMixedControlFlow() {
 			process(int(i) + j)
 		}
 		
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 		if i > 5 { // varying condition
-			return // ERROR: varying condition forbids return
+			return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 		}
 		
 		// But another go for is not allowed
-		// ERROR "nested go for loops not allowed"
-		go for k := range 3 {
+		go for k := range 3 { // ERROR "nested `go for` loop (prohibited for now)"
 			process(int(i) + k)
 		}
 	}
@@ -160,10 +153,9 @@ func testNestedVaryingConditions() {
 	
 	go for i := range len(data) {
 		// Uniform outer condition - return/break OK here
-		if mode == 1 {
-			// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
+		if mode == 1 { // uniform condition
 			if data[i] > 5 { // varying condition - now return/break forbidden
-				return // ERROR: enclosing varying condition
+				return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 			}
 			
 			// ALLOWED: Still under uniform condition only  
@@ -174,17 +166,16 @@ func testNestedVaryingConditions() {
 		
 		// Complex nesting scenarios
 		if mode > 0 { // uniform condition
-			if data[i] > 3 { // varying condition - now in varying context
-				// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
+			if data[i] > 3 { // varying condition
 				if mode > 10 { // even uniform conditions can't rescue us
-					break // ERROR: enclosing varying condition
+					break // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 				}
 				continue // OK: continue always allowed
 			}
 			
-			// ALLOWED: Back to uniform-only context
+			// FORBIDDEN: mask altered by previous continue in varying context
 			if mode > 50 {
-				break // OK: only uniform conditions in scope
+				break // ERROR "break statement not allowed after continue in varying context in SPMD for loop"
 			}
 		}
 	}
@@ -228,23 +219,21 @@ func testVaryingSwitchStatements() {
 			continue // Always OK
 		}
 		
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 		switch i % 4 { // varying condition
 		case 0:
-			return // ERROR: varying switch forbids return
+			return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 		case 1:
-			break // ERROR: varying switch forbids break
+			break // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 		default:
 			continue // OK: continue always allowed
 		}
 		
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 		var condition varying bool = i > 8
 		switch condition { // varying condition
 		case true:
-			return // ERROR: varying switch forbids return
+			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		case false:
-			break // ERROR: varying switch forbids break
+			break // ERROR "break statement not allowed after continue in varying context in SPMD for loop"
 		}
 	}
 }
@@ -264,14 +253,14 @@ func testSelectRestrictions() {
 		// default case
 	}
 	
-	// ERROR "select statements not supported in SPMD context"
 	go for i := range 4 {
-		select {
+		select { // ERROR "select statements not supported in SPMD context"
 		case val := <-ch1:
-			process(val + int(i))
+			process(val + i)
 		default:
-			process(int(i))
+			process(i)
 		}
+		_ = i // This is necessary to avoid "declared and not used" error as the body inside the select is ignored
 	}
 }
 
@@ -283,13 +272,12 @@ func testGotoRestrictions() {
 regularLabel:
 	process(2)
 	
-	// ERROR "goto statements not supported in SPMD context"
 	go for i := range 4 {
 		if i > 2 {
-			goto spmdLabel
+			goto spmdLabel // ERROR "goto statements not supported in SPMD context"
 		}
 		process(i)
-	spmdLabel:
+	spmdLabel: // ERROR "goto statements not supported in SPMD context"
 		process(i * 2)
 	}
 }
@@ -306,9 +294,8 @@ func testSPMDConditionalReturns(data varying int, threshold uniform int) varying
 		return data / 2  // OK: uniform condition
 	}
 	
-	// ERROR "conditional return with varying condition not supported"
-	if data > 5 { // varying condition
-		return data * 2 // ERROR: varying condition in SPMD function
+	if data > 5 { // varying condition - conditional returns not yet implemented
+		return data * 2 // Future: conditional return with varying condition not supported
 	}
 	
 	// Reduction produces uniform result even if input is varying as return and function call will have the same mask, we are ok in this case
@@ -336,9 +323,8 @@ func testReduceOperationEdgeCases() {
 		// This introduce a varying context in the chain of operations
 		if varyingCondition {
 			// This is considered varying context since it is inside a varying context
-			if reduce.Any(varyingCondition) { // uniform result in varying context
-				// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
-				return // ERROR: still considered varying context
+			if reduce.Any(varyingCondition) {
+				return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 			}
 		}		
 		
@@ -360,12 +346,12 @@ func testReduceOperationEdgeCases() {
 
 		// This is considered varying context since it is inside a varying context due to the continue
 		if reduce.Any(varyingCondition) { // uniform result in a varying context
-			return // ERROR: still considered varying context
+			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		}
 	}
 }
 
 // Helper function
-func process(x int) {
+func process(x varying int) {
 	_ = x
 }

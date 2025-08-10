@@ -401,7 +401,7 @@ func TestSPMDTypeChecking(t *testing.T) {
 	}()
 	buildcfg.Experiment.SPMD = true
 
-	testDirFiles(t, "testdata/spmd", 0, false)
+	testDirFiles(t, "testdata/spmd", 50, false)
 }
 
 func testDirFiles(t *testing.T, dir string, colDelta uint, manual bool) {

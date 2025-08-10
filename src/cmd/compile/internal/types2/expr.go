@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"go/constant"
 	"go/token"
+	"internal/buildcfg"
 	. "internal/types/errors"
 )
 
@@ -143,6 +144,21 @@ func (check *Checker) unary(x *operand, e *syntax.Operation) {
 			x.invalidate()
 			return
 		}
+
+		// SPMD validation: cannot take address of varying variable directly (but allow indexed expressions)
+		if buildcfg.Experiment.SPMD {
+			if spmdType, ok := x.typ().(*SPMDType); ok && spmdType.IsVarying() {
+				// Check if this is a direct variable reference (not an indexed expression)
+				if _, ok := e.X.(*syntax.Name); ok {
+					// This is taking address of a varying variable directly - forbidden
+					check.errorf(x, InvalidSPMDType, "%s", "cannot take address of varying variable")
+					x.mode_ = invalid
+					return
+				}
+				// Otherwise, this is likely an indexed expression like data[i] - allow it
+			}
+		}
+
 		x.mode_ = value
 		x.typ_ = &Pointer{base: x.typ()}
 		return
@@ -281,7 +297,8 @@ func (check *Checker) updateExprType(x syntax.Expr, typ Type, final bool) {
 		*syntax.FuncType,
 		*syntax.InterfaceType,
 		*syntax.MapType,
-		*syntax.ChanType:
+		*syntax.ChanType,
+		*syntax.SPMDType:
 		// These expression are never untyped - nothing to do.
 		// The respective sub-expressions got their final types
 		// upon assignment or use.
@@ -583,6 +600,11 @@ func (check *Checker) comparison(x, y *operand, op syntax.Operator, switchCase b
 		check.updateExprType(y.expr, Default(y.typ()), true)
 	}
 
+	// Handle SPMD comparison types before setting standard boolean result
+	if check.handleSPMDComparison(x, y, op) {
+		return // SPMD handler set the appropriate varying/uniform type
+	}
+
 	// spec: "Comparison operators compare two operands and yield
 	//        an untyped boolean value."
 	x.typ_ = Typ[UntypedBool]
@@ -806,6 +828,12 @@ func (check *Checker) binary(x *operand, e syntax.Expr, lhs, rhs syntax.Expr, op
 	if isShift(op) {
 		check.shift(x, &y, e, op)
 		return
+	}
+
+	// Handle SPMD binary expression type propagation BEFORE type matching
+	if check.handleSPMDBinaryExpr(x, &y, op) {
+		x.mode = value
+		return // SPMD handler set the appropriate type
 	}
 
 	check.matchTypes(x, &y)
@@ -1225,7 +1253,7 @@ func (check *Checker) exprInternal(T *target, x *operand, e syntax.Expr, hint Ty
 		goto Error
 
 	case *syntax.ArrayType, *syntax.SliceType, *syntax.StructType, *syntax.FuncType,
-		*syntax.InterfaceType, *syntax.MapType, *syntax.ChanType:
+		*syntax.InterfaceType, *syntax.MapType, *syntax.ChanType, *syntax.SPMDType:
 		x.mode_ = typexpr
 		x.typ_ = check.typ(e)
 		// Note: rawExpr (caller of exprInternal) will call check.recordTypeAndValue

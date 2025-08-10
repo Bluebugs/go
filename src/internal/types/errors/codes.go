@@ -1489,4 +1489,84 @@ const (
 	// Example:
 	//  var _ *varying int  // pointer to varying type not supported
 	InvalidSPMDType
+
+	// InvalidSPMDBreak occurs when a break statement is used inappropriately
+	// in an SPMD for loop under varying conditions or after mask alteration.
+	//
+	// Example:
+	//  go for i := range data {
+	//    if varyingCondition {
+	//      break  // not allowed under varying conditions
+	//    }
+	//  }
+	InvalidSPMDBreak
+
+	// InvalidSPMDReturn occurs when a return statement is used inappropriately  
+	// in an SPMD for loop under varying conditions or after mask alteration.
+	//
+	// Example:
+	//  go for i := range data {
+	//    if varyingCondition {
+	//      return  // not allowed under varying conditions
+	//    }
+	//  }
+	InvalidSPMDReturn
+
+	// InvalidNestedSPMDFor occurs when SPMD go for loops are nested.
+	//
+	// Example:
+	//  go for i := range 10 {
+	//    go for j := range 5 {  // nested go for loops not allowed
+	//      // ...
+	//    }
+	//  }
+	InvalidNestedSPMDFor
+
+	// InvalidSPMDFunction occurs when SPMD function restrictions are violated,
+	// such as public functions with varying parameters or SPMD functions
+	// containing go for loops.
+	//
+	// Example:
+	//  func PublicSPMDFunc(x varying int) int {  // public functions cannot have varying parameters
+	//    return 0
+	//  }
+	InvalidSPMDFunction
+
+	// InvalidSPMDFor occurs when SPMD for loop constraints are violated,
+	// such as SIMD register capacity exceeded or invalid loop constructs.
+	//
+	// Example:
+	//  go for i := range 32 {
+	//      var data [64]varying int64  // SIMD register capacity exceeded
+	//  }
+	InvalidSPMDFor
+
+	// InvalidSPMDGoto occurs when goto statements or labels are used within
+	// SPMD contexts where they are not supported.
+	//
+	// Example:
+	//  go for i := range 16 {
+	//      goto label  // goto statements not supported in SPMD context
+	//  }
+	InvalidSPMDGoto
+
+	// InvalidSPMDSelect occurs when select statements are used within
+	// SPMD contexts where they are not supported.
+	//
+	// Example:
+	//  go for i := range 16 {
+	//      select {    // select statements not supported in SPMD context
+	//          case <-ch:
+	//      }
+	//  }
+	InvalidSPMDSelect
+
+	// InvalidSPMDCall occurs when SPMD-specific functions are called
+	// outside their required context.
+	//
+	// Example:
+	//  func regular() {
+	//      idx := lanes.Index() // can only be called in SPMD context
+	//  }
+	InvalidSPMDCall
 )

@@ -689,6 +689,11 @@ func (check *Checker) funcDecl(obj *Func, decl *declInfo) {
 		check.softErrorf(fdecl, BadDecl, "generic function is missing function body")
 	}
 
+	// SPMD function signature validation
+	if buildcfg.Experiment.SPMD {
+		check.validateSPMDFunctionSignature(fdecl, sig)
+	}
+
 	// function body must be type-checked after global declarations
 	// (functions implemented elsewhere have no body)
 	if !check.conf.IgnoreFuncBodies && fdecl.Body != nil {

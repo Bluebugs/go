@@ -6,6 +6,9 @@ package reduce
 
 // FIXME: This is a stub implementation for Phase 1.4 type system validation.
 // All functions will panic at runtime until Phase 2+ implementation.
+// 
+// NOTE: Avoiding generic function calls due to compiler bug - generic SPMD functions
+// calling other generic SPMD functions cause "unreachable" panic.
 
 // Add reduces varying values to their uniform sum.
 func Add[T numeric](data varying[] T) uniform T {
@@ -74,11 +77,6 @@ func FindFirstSet(data varying[] bool) uniform int {
 	panic("reduce.FindFirstSet() not implemented - stub for Phase 1.4 type validation")
 }
 
-// Sum is an alias for Add for compatibility.
-func Sum[T numeric](data varying[] T) uniform T {
-	return Add(data)
-}
-
 // Mask creates a mask from boolean values.
 func Mask(data varying[] bool) uniform int {
 	// FIXME: Implement in Phase 2 - boolean mask creation
@@ -90,6 +88,9 @@ func Mul[T numeric](data varying[] T) uniform T {
 	// FIXME: Implement in Phase 2 - SIMD reduction multiply
 	panic("reduce.Mul() not implemented - stub for Phase 1.4 type validation")
 }
+
+// NOTE: Sum alias removed due to compiler bug with generic SPMD function calls.
+// Users should call Add() directly instead of Sum().
 
 // Type constraints for generic functions
 type numeric interface {

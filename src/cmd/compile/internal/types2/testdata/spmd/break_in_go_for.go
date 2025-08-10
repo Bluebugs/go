@@ -10,7 +10,7 @@ func main() {
 	// ILLEGAL: Direct break in go for loop
 	go for i := range data {
 		if data[i] > 5 {
-			break  // ERROR: break statement not allowed in SPMD for loop
+			break  // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 		}
 		data[i] *= 2
 	}
@@ -21,7 +21,7 @@ func main() {
 		case 1:
 			data[i] = 10
 		case 2:
-			break  // ERROR: break statement not allowed in SPMD for loop
+			break  // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 		default:
 			data[i] += 1
 		}
@@ -32,18 +32,19 @@ func main() {
 	go for i := range data {
 		for j := 0; j < 3; j++ {
 			if data[i]*j > 10 {
-				break outer  // ERROR: break statement not allowed in SPMD for loop
+				break outer  // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 			}
 		}
 	}
 
 	// ILLEGAL: Break in nested go for loop (nesting prohibited for now)
 	go for i := range data {
-		go for j := range 5 { // ERROR: nested `go for` loop (prohibited for now)
+		go for j := range 5 { // ERROR "nested `go for` loop (prohibited for now)"
 			if i*j > 10 {
 				break  // ERROR: break statement not allowed in SPMD for loop
 			}
 		}
+		_ = i // use i to avoid "declared and not used" error
 	}
 }
 
@@ -59,7 +60,7 @@ func conditionalBreak() {
 			break  // LEGAL: break statement is allowed in a guaranteed pure uniform context withing a SPMD for loop
 		}
 		
-		data[i] = process(data[i])
+		data[i] = process(data[i]) // ERROR "cannot use data[i] (variable of type varying int) as int value in argument to process: cannot assign varying expression to uniform variable"
 	}
 }
 
@@ -87,7 +88,7 @@ func legalInnerBreak() {
 		// Regular for loop inside go for - break is allowed here
 		for j := 0; j < 10; j++ {
 			if data[i]+j > 15 {
-				break  // LEGAL: break in regular for loop
+				break  // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 			}
 			data[i] += j
 		}

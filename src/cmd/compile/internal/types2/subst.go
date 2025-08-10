@@ -263,6 +263,16 @@ func (subst *subster) typ(typ Type) Type {
 			return subst.check.instance(subst.pos, orig, targs, subst.expanding, subst.ctxt)
 		}
 
+	case *SPMDType:
+		elem := subst.typ(t.elem)
+		if elem != t.elem {
+			return &SPMDType{
+				qualifier:  t.qualifier,
+				constraint: t.constraint,
+				elem:       elem,
+			}
+		}
+
 	case *TypeParam:
 		return subst.smap.lookup(t)
 

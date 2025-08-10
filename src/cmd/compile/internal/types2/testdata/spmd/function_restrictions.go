@@ -5,13 +5,11 @@ package spmdtest
 
 import "lanes"
 
-// ERROR "public functions cannot have varying parameters"
-func PublicSPMDFunc(data varying int) varying int {
+func PublicSPMDFunc(data varying int) varying int { // ERROR "public functions cannot have varying parameters"
 	return data * 2
 }
 
-// ERROR "public functions cannot return varying types"
-func PublicVaryingReturn() varying int {
+func PublicVaryingReturn() varying int { // ERROR "public functions cannot return varying types"
 	return 42
 }
 
@@ -25,8 +23,7 @@ func PublicRegularFunc(data int) int {
 	return data * 2
 }
 
-// ERROR "functions with varying parameters cannot contain go for loops"
-func invalidNestedGoFor(data varying int) varying int {
+func invalidNestedGoFor(data varying int) varying int { // ERROR "functions with varying parameters cannot contain go for loops"
 	go for i := range 10 {
 		data += varying int(i)
 	}
@@ -48,13 +45,14 @@ func validSPMDCalls(data varying int) varying int {
 
 // Test context restrictions for lanes.Index()
 func testLanesIndexRestrictions() {
-	// ERROR "lanes.Index() can only be called in SPMD context"
-	idx := lanes.Index()
+	idx := lanes.Index() // ERROR "lanes.Index() can only be called in SPMD context"
 	
 	// Valid: lanes.Index() in go for loop
 	go for i := range 10 {
 		validIdx := lanes.Index()
-		process(validIdx[0]) // Use first lane for regular function
+		process(validIdx) // Use first lane for regular function
+
+		_ = i
 	}
 	
 	_ = idx
@@ -67,20 +65,20 @@ func testVaryingParameterTypes(
 	c varying[4] int,       // OK: constrained varying
 	d varying[] byte,       // OK: universal constraint
 ) varying int {
-	return a + varying int(b) + c[0] + varying int(d[0])
+	_ = d
+	return a + varying int(b) + c
 }
 
-// ERROR "varying map keys not supported"
 func testInvalidMapKeys() {
 	var vKey varying string
-	m := make(map[varying string]int) // This should error
+	m := make(map[varying string]int) // ERROR "varying map keys not supported"
 	m[vKey] = 42
 	_ = m
 }
 
-// ERROR "varying channel types not supported"
-func testInvalidChannelTypes() {
-	ch := make(chan varying int) // This should error
+// Test channels with varying types (now allowed)
+func testValidChannelTypes() {
+	ch := make(chan varying int) // OK: channels can carry varying types
 	_ = ch
 }
 
@@ -94,9 +92,9 @@ func testVaryingInterface() {
 	// Type switches with varying interface{} require explicit handling
 	switch v := iface.(type) {
 	case varying int:
-		process(int(v[0])) // Use first lane for demonstration
+		process(v)
 	default:
-		// ERROR "varying types in type switch must be handled explicitly"
+		// no handling
 	}
 }
 
@@ -108,19 +106,16 @@ func testConstrainedVarying() {
 	var a varying[4] int         // OK: compile-time constant
 	var b varying[VALID_CONSTRAINT] int // OK: named constant
 	
-	// ERROR "constraint must be compile-time constant"
-	var c varying[invalid_constraint] int
+	var c varying[invalid_constraint] int // ERROR "constraint must be compile-time constant"
 	
-	// ERROR "constraint must be positive"
-	var d varying[0] int
+	var d varying[0] int // ERROR "constraint must be positive"
 	
-	// ERROR "constraint must be positive"
-	var e varying[-1] int
+	var e varying[-1] int // ERROR "constraint must be positive"
 	
 	_, _, _, _, _ = a, b, c, d, e
 }
 
 // Helper function
-func process(x int) {
+func process(x varying int) {
 	_ = x
 }

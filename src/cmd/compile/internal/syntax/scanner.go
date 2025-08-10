@@ -394,12 +394,12 @@ func (s *scanner) ident() {
 		str := string(lit)
 		switch str {
 		case "uniform":
-			s.nlsemi = false // uniform types don't require semicolon insertion
+			s.nlsemi = true // uniform should trigger semicolon insertion when used as identifier
 			s.lit = str
 			s.tok = _Uniform
 			return
 		case "varying":
-			s.nlsemi = false // varying types don't require semicolon insertion
+			s.nlsemi = true // varying should trigger semicolon insertion when used as identifier
 			s.lit = str
 			s.tok = _Varying
 			return

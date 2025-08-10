@@ -11,6 +11,7 @@ import (
 	"cmd/compile/internal/syntax"
 	"fmt"
 	"go/constant"
+	"internal/buildcfg"
 	. "internal/types/errors"
 )
 
@@ -329,6 +330,40 @@ func (x *operand) assignableTo(check *Checker, T Type, cause *string) (bool, Cod
 	origT := T
 	V := Unalias(x.typ())
 	T = Unalias(T)
+
+	// SPMD assignment rules validation
+	if check != nil && buildcfg.Experiment.SPMD {
+		if vSpmd, ok := V.(*SPMDType); ok {
+			if tSpmd, ok := T.(*SPMDType); ok {
+				// Both are SPMD types: must have same qualifier
+				if vSpmd.qualifier != tSpmd.qualifier {
+					if vSpmd.IsVarying() && tSpmd.IsUniform() {
+						if cause != nil {
+							*cause = "cannot assign varying expression to uniform variable"
+						}
+						return false, IncompatibleAssign
+					}
+					// Uniform to varying is allowed (automatic broadcast)
+				}
+			} else {
+				// Source is SPMD, target is not
+				if vSpmd.IsVarying() {
+					// Exception: varying types can be assigned to interface{}
+					if iface, ok := T.(*Interface); ok && iface.Empty() {
+						// Allow varying T to interface{} assignment
+						return true, 0
+					}
+					if cause != nil {
+						*cause = "cannot assign varying expression to uniform variable"
+					}
+					return false, IncompatibleAssign
+				}
+			}
+		} else if _, ok := T.(*SPMDType); ok {
+			// Target is SPMD, source is not - treat source as uniform
+			// This allows uniform-to-varying broadcast
+		}
+	}
 
 	// x's type is identical to T
 	if Identical(V, T) {

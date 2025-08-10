@@ -425,6 +425,11 @@ func (check *Checker) stmt(ctxt stmtContext, s syntax.Stmt) {
 	// reset context for statements of inner blocks
 	inner := ctxt &^ (fallthroughOk | finalSwitchCase | inTypeSwitch)
 
+	// Handle SPMD-specific statement validation
+	if check.handleSPMDStatement(s, ctxt) {
+		return
+	}
+
 	switch s := s.(type) {
 	case *syntax.EmptyStmt:
 		// ignore
@@ -480,6 +485,15 @@ func (check *Checker) stmt(ctxt stmtContext, s syntax.Stmt) {
 			if !x.isValid() {
 				return
 			}
+
+			// SPMD pointer arithmetic validation
+			if handled, valid, errorMsg := check.validateSPMDPointerArithmetic(&x, s.Op); handled {
+				if !valid {
+					check.errorf(s.Lhs, UndefinedOp, "%s", errorMsg)
+					return
+				}
+			}
+
 			if !allNumeric(x.typ()) {
 				check.errorf(s.Lhs, NonNumericIncDec, invalidOp+"%s%s%s (non-numeric type %s)", s.Lhs, s.Op, s.Op, x.typ())
 				return
@@ -664,6 +678,12 @@ func (check *Checker) stmt(ctxt stmtContext, s syntax.Stmt) {
 		}
 
 	case *syntax.ForStmt:
+		// Handle SPMD for loops specially
+		if s.IsSpmd {
+			check.spmdForStmt(s, inner)
+			break
+		}
+
 		inner |= breakOk | continueOk
 
 		if rclause, _ := s.Init.(*syntax.RangeClause); rclause != nil {

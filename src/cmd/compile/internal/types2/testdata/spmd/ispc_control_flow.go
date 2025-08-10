@@ -35,6 +35,7 @@ func testUniformReturnBreak() {
 		default:
 			continue // Always OK
 		}
+		_ = i // Use i to avoid "declared and not used" error
 	}
 }
 
@@ -43,14 +44,12 @@ func testVaryingReturnBreak() {
 	data := []int{1, 2, 3, 4, 5, 6, 7, 8}
 	
 	go for i := range len(data) {
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 		if data[i] < 0 { // varying condition
-			return // ERROR: varying condition forbids return
+			return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 		}
 		
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 		if data[i] > 100 { // varying condition
-			break // ERROR: varying condition forbids break
+			break // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 		}
 		
 		// ALLOWED: Continue under varying condition
@@ -58,12 +57,11 @@ func testVaryingReturnBreak() {
 			continue // OK: continue always allowed
 		}
 		
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
-		switch data[i] { // varying switch
+		switch data[i] { // varying switch - mask already altered by previous continue
 		case 1:
-			return // ERROR: varying switch forbids return
+			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		case 2:
-			break // ERROR: varying switch forbids break
+			break // ERROR "break statement not allowed after continue in varying context in SPMD for loop"
 		default:
 			continue // OK: continue always allowed
 		}
@@ -78,9 +76,8 @@ func testNestedConditions() {
 	go for i := range len(data) {
 		// Scenario A: Uniform outer, varying inner - return/break FORBIDDEN in inner
 		if mode == 1 { // uniform condition - depth 0
-			// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 			if data[i] > 3 { // varying condition - depth 1
-				return // ERROR: varying depth > 0
+				return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 			}
 			
 			// ALLOWED: Still under uniform condition only
@@ -100,9 +97,8 @@ func testNestedConditions() {
 		
 		// Scenario C: Varying outer, uniform inner - return/break FORBIDDEN everywhere
 		if data[i] > 2 { // varying condition - depth 1
-			// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 			if mode > 0 { // uniform condition but varying depth > 0
-				break // ERROR: enclosing varying condition
+				break // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 			}
 			
 			continue // OK: continue always allowed
@@ -155,21 +151,19 @@ func testSwitchStatementVariations() {
 		// Mixed: uniform switch with varying case bodies
 		switch mode { // uniform switch - OK so far
 		case 1:
-			// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 			if data[i] > 2 { // varying condition in case body
-				return // ERROR: now under varying condition
+				return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 			}
 			break // OK: still under uniform switch only
 		case 2:
 			return // OK: uniform switch allows return
 		}
 		
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 		switch data[i] % 3 { // varying expression
 		case 0:
-			return // ERROR: varying switch
+			return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 		case 1:
-			break // ERROR: varying switch
+			break // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 		default:
 			continue // OK: continue always allowed
 		}
@@ -186,9 +180,8 @@ func testFunctionCallConditions() {
 			return // OK: uniform condition
 		}
 		
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 		if isNegative(data[i]) { // function taking varying input and returning varying result
-			return // ERROR: varying condition
+			return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 		}
 		
 		// ALLOWED: Uniform result from uniform function
@@ -210,9 +203,8 @@ func testComplexMaskingScenarios() {
 				continue // OK: continue handles masking automatically
 			}
 			
-			// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
-			if data[i] == 5 { // still under varying condition
-				return // ERROR: would require complex mask management
+			if data[i] == 5 { // mask altered by previous continue
+				return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 			}
 		}
 		
@@ -221,9 +213,8 @@ func testComplexMaskingScenarios() {
 		condition2 := data[i] < 6
 		
 		if condition1 { // varying
-			if condition2 { // varying nested in varying
-				// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
-				return // ERROR: deeply nested varying conditions
+			if condition2 { // varying nested in varying - mask already altered by previous continue
+				return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 			}
 		}
 	}
@@ -240,9 +231,8 @@ func testMaskAlterationScenarios() {
 			continue  // OK: continue always allowed, but alters mask
 		}
 		
-		// ERROR "return statement not allowed after continue in varying context in SPMD for loop"  
 		if mode == 1 { // uniform condition, but mask is altered
-			return // ERROR: return forbidden due to mask alteration
+			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		}
 		
 		process(data[i])
@@ -254,9 +244,8 @@ func testMaskAlterationScenarios() {
 			continue  // Alters mask
 		}
 		
-		// ERROR "break statement not allowed after continue in varying context in SPMD for loop"
 		if mode > 0 { // uniform condition, but mask altered  
-			break // ERROR: break forbidden due to mask alteration
+			break // ERROR "break statement not allowed after continue in varying context in SPMD for loop"
 		}
 		
 		process(data[i])
@@ -270,9 +259,8 @@ func testMaskAlterationScenarios() {
 			}
 		}
 		
-		// ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		if mode > 5 { // uniform condition on remaining active lanes only
-			return // ERROR: uniform condition but altered mask
+			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		}
 		
 		process(data[i])
@@ -320,11 +308,10 @@ outerUniform:
 			break outerUniform // OK: uniform condition allows labeled break
 		}
 		
-		// ERROR "break/return statement not allowed under varying conditions in SPMD for loop"
 	outerVarying:
 		for j := 0; j < 3; j++ { // regular for loop
 			if data[i] > j { // varying condition
-				break outerVarying // ERROR: varying condition in SPMD context
+				break outerVarying // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 			}
 		}
 	}
@@ -341,4 +328,8 @@ func isNegative(x varying int) varying bool {
 
 func getMode() uniform int {
 	return 1
+}
+
+func process(x varying int) {
+	_ = x // Simulate processing
 }

@@ -8,6 +8,7 @@ package types2
 
 import (
 	"cmd/compile/internal/syntax"
+	"internal/buildcfg"
 	. "internal/types/errors"
 	"strings"
 )
@@ -338,6 +339,11 @@ func (check *Checker) callExpr(x *operand, call *syntax.CallExpr) exprKind {
 	}
 	x.expr = call
 	check.hasCallOrRecv = true
+
+	// SPMD function call validation
+	if buildcfg.Experiment.SPMD {
+		check.validateSPMDFunctionCall(call, x)
+	}
 
 	// if type inference failed, a parameterized result must be invalidated
 	// (operands cannot have a parameterized type)

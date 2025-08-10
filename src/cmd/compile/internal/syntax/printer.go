@@ -523,6 +523,19 @@ func (p *printer) printRawNode(n Node) {
 			p.print(n.Elem)
 		}
 
+	case *SPMDType:
+		// Print SPMD type qualifier followed by element type
+		if n.Qualifier == _Uniform {
+			p.print(_Uniform)
+		} else if n.Qualifier == _Varying {
+			p.print(_Varying)
+		}
+		// Handle constrained varying types
+		if n.Constraint != nil {
+			p.print(_Lbrack, n.Constraint, _Rbrack)
+		}
+		p.print(blank, n.Elem)
+
 	// statements
 	case *DeclStmt:
 		p.printDecl(n.DeclList)

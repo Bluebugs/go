@@ -574,6 +574,14 @@ func (pw *pkgWriter) typIdx(typ types2.Type, dict *writerDict) typeInfo {
 		w.Code(pkgbits.TypePointer)
 		w.typ(typ.Elem())
 
+	case *types2.SPMDType:
+		w.Code(pkgbits.TypeSPMD)
+		w.Bool(typ.IsVarying()) // varying vs uniform
+		if typ.IsVarying() {
+			w.Int64(typ.Constraint()) // constraint value
+		}
+		w.typ(typ.Elem()) // element type
+
 	case *types2.Signature:
 		base.Assertf(typ.TypeParams() == nil, "unexpected type params: %v", typ)
 		w.Code(pkgbits.TypeSignature)
@@ -1872,6 +1880,7 @@ func (w *writer) expr(expr syntax.Expr) {
 	switch expr := expr.(type) {
 	default:
 		w.p.unexpected("expression", expr)
+
 
 	case *syntax.CompositeLit:
 		w.Code(exprCompLit)

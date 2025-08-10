@@ -162,6 +162,9 @@ type Checker struct {
 	// debugging
 	posStack []syntax.Pos // stack of source positions seen; used for panic tracing
 	indent   int          // indentation for tracing
+
+	// SPMD information (valid only during SPMD context)
+	spmdInfo SPMDControlFlowInfo // tracks SPMD control flow state
 }
 
 // addDeclDep adds the dependency edge (check.decl -> to) if check.decl exists

@@ -284,6 +284,8 @@ func (r *reader) doTyp() (res types2.Type) {
 		return r.interfaceType()
 	case pkgbits.TypeUnion:
 		return r.unionType()
+	case pkgbits.TypeSPMD:
+		return r.spmdType()
 	}
 }
 
@@ -314,6 +316,21 @@ func (r *reader) unionType() *types2.Union {
 		terms[i] = types2.NewTerm(r.Bool(), r.typ())
 	}
 	return types2.NewUnion(terms)
+}
+
+func (r *reader) spmdType() types2.Type {
+	isVarying := r.Bool()
+	var constraint int64 = -1
+	if isVarying {
+		constraint = r.Int64()
+	}
+	elem := r.typ()
+	
+	if isVarying {
+		return types2.NewVaryingConstrained(elem, constraint)
+	} else {
+		return types2.NewUniform(elem)
+	}
 }
 
 func (r *reader) interfaceType() *types2.Interface {

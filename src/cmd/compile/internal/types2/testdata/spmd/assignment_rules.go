@@ -28,21 +28,17 @@ func invalidAssignments() {
 	var u_int uniform int
 	var v_int varying int = 42
 	
-	// ERROR "cannot assign varying expression to uniform variable"
-	u_int = v_int
+	u_int = v_int // ERROR "cannot use v_int (variable of type varying int) as uniform int value in assignment: cannot assign varying expression to uniform variable"
 	
-	// ERROR "cannot pass varying argument to uniform parameter"
-	processUniform(v_int)
+	processUniform(v_int) // ERROR "cannot use v_int (variable of type varying int) as uniform int value in argument to processUniform: cannot assign varying expression to uniform variable"
 	
-	// ERROR "cannot return varying expression from uniform function"
 	_ = uniformReturner(v_int)
 	
 	_ = u_int
 }
 
 // Test function signature constraints
-// ERROR "public functions cannot have varying parameters"
-func PublicVaryingFunc(x varying int) int {
+func PublicVaryingFunc(x varying int) int { // ERROR "public functions cannot have varying parameters"
 	return int(x)
 }
 
@@ -51,8 +47,7 @@ func privateVaryingFunc(x varying int) varying int {
 	return x * 2
 }
 
-// ERROR "functions with varying parameters cannot contain go for loops"
-func invalidSPMDFunction(x varying int) varying int {
+func invalidSPMDFunction(x varying int) varying int { // ERROR "functions with varying parameters cannot contain go for loops"
 	go for i := range 10 {
 		x += varying int(i)
 	}
@@ -69,12 +64,11 @@ func multipleAssignments() {
 	v1, v2 = u1, u2            // OK: uniform to varying (broadcast)
 	v1, v2 = v1, v2            // OK: varying to varying
 	
-	// ERROR "cannot assign varying expression to uniform variable"
-	u1, u2 = v1, v2
+	u1, u2 = v1, v2            // ERROR "cannot use v1 (variable of type varying int) as uniform int value in assignment: cannot assign varying expression to uniform variable"
+	                           // ERROR "cannot use v2 (variable of type varying int) as uniform int value in assignment: cannot assign varying expression to uniform variable"
 	
 	// Mixed assignments
-	// ERROR "cannot assign varying expression to uniform variable"
-	u1, v1 = v1, u1
+	u1, v1 = v1, u1            // ERROR "cannot use v1 (variable of type varying int) as uniform int value in assignment: cannot assign varying expression to uniform variable"
 }
 
 // Helper functions for testing
@@ -87,6 +81,5 @@ func processVarying(x varying int) varying int {
 }
 
 func uniformReturner(x varying int) uniform int {
-	// This should be an error context, not here specifically
 	return 42
 }

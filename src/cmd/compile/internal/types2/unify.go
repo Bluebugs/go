@@ -349,6 +349,11 @@ func (u *unifier) nify(x, y Type, mode unifyMode, p *ifacePair) (result bool) {
 		}
 	}
 
+	// Handle SPMD type unification for generic type inference
+	if handled, unified := u.handleSPMDUnification(x, y, mode); handled {
+		return unified
+	}
+
 	// Cases where at least one of x or y is a type parameter recorded with u.
 	// If we have at least one type parameter, there is one in x.
 	// If we have exactly one type parameter, because it is in x,

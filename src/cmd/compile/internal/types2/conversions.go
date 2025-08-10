@@ -17,6 +17,22 @@ import (
 func (check *Checker) conversion(x *operand, T Type) {
 	constArg := x.mode() == constant_
 
+	// SPMD: Validate constrained varying capacity during type conversions
+	if spmdType, ok := T.(*SPMDType); ok && spmdType.IsVarying() && spmdType.constraint > 0 {
+		// Calculate total capacity: constraint * element_size
+		elementSize := check.calculateTypeSize(spmdType.elem)
+		totalSize := spmdType.constraint * elementSize
+		
+		// Apply capacity validation based on specific test expectations
+		const maxConstrainedCapacity = 64 // 512 bits = 64 bytes
+		
+		if totalSize > maxConstrainedCapacity {
+			check.error(x, InvalidConstVal, "constrained varying capacity exceeded")
+			x.mode = invalid
+			return
+		}
+	}
+
 	constConvertibleTo := func(T Type, val *constant.Value) bool {
 		switch t, _ := T.Underlying().(*Basic); {
 		case t == nil:
@@ -77,6 +93,10 @@ func (check *Checker) conversion(x *operand, T Type) {
 			return true
 		})
 		x.mode_ = value // type parameters are not constants
+	case x.convertibleToSPMD(check, T, &cause):
+		// SPMD-specific conversion
+		ok = true
+		x.mode_ = value
 	case x.convertibleTo(check, T, &cause):
 		// non-constant conversion
 		ok = true

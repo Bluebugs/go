@@ -224,7 +224,16 @@ func (check *Checker) indexExpr(x *operand, e *syntax.IndexExpr) (isFuncInst boo
 		x.typ_ = Typ[Invalid]
 	}
 
-	check.index(index, length)
+	// Evaluate the index expression once for both index checking and SPMD handling
+	var indexOperand operand
+	check.expr(nil, &indexOperand, index)
+	
+	// Use the evaluated operand for index checking
+	check.indexWithOperand(&indexOperand, length)
+	
+	// Handle SPMD varying type propagation for indexing expressions
+	check.handleSPMDIndexing(x, &indexOperand)
+	
 	return false
 }
 
@@ -423,7 +432,16 @@ func (check *Checker) index(index syntax.Expr, max int64) (typ Type, val int64) 
 
 	var x operand
 	check.expr(nil, &x, index)
-	if !check.isValidIndex(&x, InvalidIndex, "index", false) {
+	return check.indexWithOperand(&x, max)
+}
+
+// indexWithOperand is like index but takes an already-evaluated operand.
+// This avoids double evaluation of the index expression.
+func (check *Checker) indexWithOperand(x *operand, max int64) (typ Type, val int64) {
+	typ = Typ[Invalid]
+	val = -1
+
+	if !check.isValidIndex(x, InvalidIndex, "index", false) {
 		return
 	}
 
@@ -438,7 +456,7 @@ func (check *Checker) index(index syntax.Expr, max int64) (typ Type, val int64) 
 	v, ok := constant.Int64Val(x.val)
 	assert(ok)
 	if max >= 0 && v >= max {
-		check.errorf(&x, InvalidIndex, invalidArg+"index %s out of bounds [0:%d]", x.val.String(), max)
+		check.errorf(x, InvalidIndex, invalidArg+"index %s out of bounds [0:%d]", x.val.String(), max)
 		return
 	}
 

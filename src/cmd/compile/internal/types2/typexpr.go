@@ -158,6 +158,11 @@ func (check *Checker) validVarType(e syntax.Expr, typ Type) {
 		return
 	}
 
+	// SPMD types are always valid as variable types (Phase 1.5 SPMD implementation)
+	if check.validVarTypeSPMD(e, typ) {
+		return
+	}
+
 	// We don't want to call typ.Underlying() or complete interfaces while we are in
 	// the middle of type-checking parameter declarations that might belong
 	// to interface methods. Delay this check to the end of type-checking.
@@ -383,6 +388,11 @@ func (check *Checker) typInternal(e0 syntax.Expr, def *TypeName) (T Type) {
 		typ.elem = check.varType(e.Elem)
 		return typ
 
+	case *syntax.SPMDType:
+		// Handle SPMD types directly  
+		if t, handled := check.handleSPMDTypeExpr(e0, def); handled {
+			return t
+		}
 
 	default:
 		// Try SPMD type handling first

@@ -626,6 +626,9 @@ func (w *tpWalker) isParameterized(typ Type) (res bool) {
 			}
 		}
 
+	case *SPMDType:
+		return w.isParameterized(t.elem)
+
 	case *TypeParam:
 		return slices.Index(w.tparams, t) >= 0
 
@@ -776,6 +779,9 @@ func (w *cycleFinder) typ(typ Type) {
 		for _, tpar := range t.TypeArgs().list() {
 			w.typ(tpar)
 		}
+
+	case *SPMDType:
+		w.typ(t.elem)
 
 	case *TypeParam:
 		if i := slices.Index(w.tparams, t); i >= 0 && w.inferred[i] != nil {

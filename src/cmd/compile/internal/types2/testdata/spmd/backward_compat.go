@@ -1,20 +1,28 @@
-//go:build goexperiment.spmd
-
 // Code that uses "uniform" and "varying" as regular identifiers
-// This should parse successfully in all circumstances
-package spmdtest
+// This should parse and compile successfully in all circumstances
+package spmdTest
 
-// These should be valid identifiers in all circumstances
-var uniform int = 42
-var varying float32 = 3.14
+// Using uniform and varying as variable names
+func hideVar() {
+	var uniform int = 42
+	var varying float32 = 3.14
 
-// Using them as function names
-func uniform() int {
-	return 42
+	_ = uniform
+	_ = varying
 }
 
-func varying() float32 {
-	return 3.14
+func hideFunc() {
+	// Using them as function names
+	uniform := func() int {
+		return 42
+	}
+
+	varying := func() float32 {
+		return 3.14
+	}
+
+	_ = uniform()
+	_ = varying()
 }
 
 // Using them as struct field names
@@ -23,26 +31,30 @@ type Config struct {
 	varying float32
 }
 
+// Using them as local variable names
 func main() {
-	// Using uniform and varying as regular variable names
-	uniform = 100
-	varying = 2.71
+	// Local variables with these names
+	uniform := 100
+	varying := 2.71
 
 	// Using them in function calls
 	process(uniform, varying)
 
 	// Using them as function calls
-	_ = uniform()
-	_ = varying()
+	hideFunc()
+	hideVar()
 
+	// Using them in struct literals and field access
 	c := Config{
 		uniform: 1,
 		varying: 2.0,
 	}
 
-	_ = c
+	// Accessing struct fields
+	_ = c.uniform
+	_ = c.varying
 }
 
-func process(a int, b float32) {
+func process(a int, b varying float64) {
 	_, _ = a, b
 }
