@@ -55,13 +55,13 @@ func Swizzle[T any](value varying T, indices varying int) varying T {
 }
 
 // ShiftLeft performs per-lane left shift operation.
-func ShiftLeft(value varying int, shift varying int) varying int {
+func ShiftLeft[T integer](value varying T, shift varying T) varying T {
 	// FIXME: Implement in Phase 2 - per-lane left shift
 	panic("lanes.ShiftLeft() not implemented - stub for Phase 1.4 type validation")
 }
 
 // ShiftRight performs per-lane right shift operation.  
-func ShiftRight(value varying int, shift varying int) varying int {
+func ShiftRight[T integer](value varying T, shift varying T) varying T {
 	// FIXME: Implement in Phase 2 - per-lane right shift
 	panic("lanes.ShiftRight() not implemented - stub for Phase 1.4 type validation")
 }
