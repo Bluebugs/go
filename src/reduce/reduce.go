@@ -60,7 +60,7 @@ func Xor[T integer](data varying[] T) uniform T {
 
 // From converts varying values to a uniform array.
 // Each lane value becomes an array element.
-func From[T any](data varying[] T) []T {
+func From[T any](data varying T) []T {
 	// FIXME: Implement in Phase 2 - varying to array conversion
 	panic("reduce.From() not implemented - stub for Phase 1.4 type validation")
 }
