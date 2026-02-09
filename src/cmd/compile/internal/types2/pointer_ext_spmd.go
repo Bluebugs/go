@@ -34,8 +34,8 @@ func (check *Checker) validateSPMDAddressOperation(x *operand, operandExpr synta
 	// Only reject if we're taking address of a varying variable directly (not an indexed expression)
 	// Allow: &data[i] where i is varying (valid scatter/gather pattern)
 	// Reject: &data where data is varying variable (invalid)
-	
-	if spmdType, ok := x.typ.(*SPMDType); ok && spmdType.qualifier == VaryingQualifier {
+
+	if spmdType, ok := x.typ().(*SPMDType); ok && spmdType.qualifier == VaryingQualifier {
 		// Check if this is a direct variable reference (not an indexed expression)
 		if name, ok := operandExpr.(*syntax.Name); ok && name != nil {
 			// This is taking address of a varying variable directly - forbidden
@@ -55,14 +55,14 @@ func (check *Checker) validateSPMDAddressOperation(x *operand, operandExpr synta
 			var left, right operand
 			check.expr(nil, &left, binExpr.X)
 			check.expr(nil, &right, binExpr.Y)
-			
+
 			// If either operand is varying, this could be out of bounds
 			leftVarying := false
 			rightVarying := false
-			if spmdType, ok := left.typ.(*SPMDType); ok && spmdType.IsVarying() {
+			if spmdType, ok := left.typ().(*SPMDType); ok && spmdType.IsVarying() {
 				leftVarying = true
 			}
-			if spmdType, ok := right.typ.(*SPMDType); ok && spmdType.IsVarying() {
+			if spmdType, ok := right.typ().(*SPMDType); ok && spmdType.IsVarying() {
 				rightVarying = true
 			}
 			
@@ -82,7 +82,7 @@ func (check *Checker) validateSPMDPointerArithmetic(x *operand, op syntax.Operat
 	}
 
 	// Check if operand is a varying pointer
-	if spmdType, ok := x.typ.(*SPMDType); ok && spmdType.qualifier == VaryingQualifier {
+	if spmdType, ok := x.typ().(*SPMDType); ok && spmdType.qualifier == VaryingQualifier {
 		if ptr, ok := spmdType.elem.(*Pointer); ok && ptr != nil {
 			// This is a varying pointer - arithmetic operations like ++ are not supported
 			return true, false, "varying pointer arithmetic not supported in this context"
@@ -164,14 +164,14 @@ func (check *Checker) validateSPMDVaryingPointerAccess(x *operand, index syntax.
 	}
 
 	// Check if we're taking address of an array element with varying index
-	if x.mode == variable {
+	if x.mode() == variable {
 		if indexExpr, ok := index.(*syntax.IndexExpr); ok {
 			var idx operand
 			check.expr(nil, &idx, indexExpr.Index)
-			
+
 			// Check if index is a varying expression that could cause out-of-bounds access
-			if idx.typ != nil {
-				if spmdType, ok := idx.typ.(*SPMDType); ok && spmdType.IsVarying() {
+			if idx.typ() != nil {
+				if spmdType, ok := idx.typ().(*SPMDType); ok && spmdType.IsVarying() {
 					// This is a simplified check - in a real implementation, we would need
 					// more sophisticated analysis to determine if the access is truly unsafe
 					return true, "potential out-of-bounds access with varying pointer"

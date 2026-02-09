@@ -68,12 +68,12 @@ func (check *Checker) processSPMDType(spmdExpr *syntax.SPMDType, def *TypeName) 
 			// varying[n] - numeric constraint
 			var x operand
 			check.expr(nil, &x, spmdExpr.Constraint)
-			if x.mode != constant_ {
+			if x.mode() != constant_ {
 				check.error(spmdExpr.Constraint, InvalidConstVal, "constraint must be compile-time constant")
 				return nil, false
 			}
 
-			if !isInteger(x.typ) {
+			if !isInteger(x.typ()) {
 				check.error(spmdExpr.Constraint, InvalidConstVal, "constraint must be an integer constant")
 				return nil, false
 			}

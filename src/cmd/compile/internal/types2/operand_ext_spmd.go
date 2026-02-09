@@ -77,7 +77,7 @@ func (x *operand) checkSPMDtoSPMDAssignability(vSPMD, tSPMD *SPMDType, cause *st
 	if vSPMD.qualifier == tSPMD.qualifier {
 		// Check element type compatibility (identical or convertible)
 		elementsCompatible := Identical(vSPMD.elem, tSPMD.elem) || x.convertibleToSPMDElement(vSPMD.elem, tSPMD.elem)
-		
+
 		if elementsCompatible {
 			// Rule 2a: Constraint compatibility rules
 			if vSPMD.qualifier == VaryingQualifier {
@@ -85,12 +85,12 @@ func (x *operand) checkSPMDtoSPMDAssignability(vSPMD, tSPMD *SPMDType, cause *st
 				if vSPMD.constraint > 0 && tSPMD.constraint == 0 {
 					return true // varying[4] can be assigned to varying[]
 				}
-				
+
 				// ALLOWED: Unconstrained varying can be assigned to any constrained varying (broadcast)
 				if vSPMD.constraint == -1 && tSPMD.constraint >= 0 {
 					return true // varying can be assigned to varying[4] or varying[]
 				}
-				
+
 				// FORBIDDEN: Constrained varying to unconstrained varying (varying[4] -> varying)
 				// This requires explicit lanes.FromConstrained() call
 				if vSPMD.constraint > 0 && tSPMD.constraint == -1 {
@@ -196,14 +196,14 @@ func (x *operand) checkRegularToSPMDAssignability(V Type, tSPMD *SPMDType, cause
 }
 
 // convertibleToSPMD checks if x can be converted to T via SPMD-specific conversion rules.
-// This is more permissive than assignability and allows conversions between different 
+// This is more permissive than assignability and allows conversions between different
 // constrained varying types with compatible element types.
 func (x *operand) convertibleToSPMD(check *Checker, T Type, cause *string) bool {
 	if !buildcfg.Experiment.SPMD {
 		return false
 	}
 
-	V := x.typ
+	V := x.typ()
 	vSPMD, vIsSPMD := V.(*SPMDType)
 	tSPMD, tIsSPMD := T.(*SPMDType)
 

@@ -165,10 +165,10 @@ func (check *Checker) spmdForStmt(s *syntax.ForStmt, ctxt stmtContext) {
 		if s.Cond != nil {
 			var x operand
 			check.expr(nil, &x, s.Cond)
-			if x.mode == invalid {
+			if x.mode() == invalid {
 				return
 			}
-			if !allBoolean(x.typ) {
+			if !allBoolean(x.typ()) {
 				check.error(&x, InvalidCond, "non-boolean condition in for statement")
 			}
 		}
@@ -194,7 +194,7 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 	// Type-check the range expression
 	var expr operand
 	check.expr(nil, &expr, x)
-	if expr.mode == invalid {
+	if expr.mode() == invalid {
 		return
 	}
 	
@@ -202,7 +202,7 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 	if constraint != nil {
 		var constraintOp operand
 		check.expr(nil, &constraintOp, constraint)
-		if constraintOp.mode != constant_ {
+		if constraintOp.mode() != constant_ {
 			check.error(constraint, InvalidConstVal, "constraint must be a constant")
 			return
 		}
@@ -248,7 +248,7 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 				obj.typ = NewVarying(Typ[Int])
 			} else if i == 1 && sValue != nil {
 				// Value is varying element type in SPMD range
-				obj.typ = NewVarying(expr.typ)
+				obj.typ = NewVarying(expr.typ())
 			}
 			assert(obj.typ != nil)
 		}
@@ -287,8 +287,8 @@ func (check *Checker) spmdIfStmt(s *syntax.IfStmt, ctxt stmtContext) {
 	check.expr(nil, &x, s.Cond)
 
 	isVaryingCondition := false
-	if x.mode != invalid && x.typ != nil {
-		if spmdType, ok := x.typ.(*SPMDType); ok && spmdType.qualifier == VaryingQualifier {
+	if x.mode() != invalid && x.typ() != nil {
+		if spmdType, ok := x.typ().(*SPMDType); ok && spmdType.qualifier == VaryingQualifier {
 			isVaryingCondition = true
 		}
 	}
@@ -432,15 +432,15 @@ func (check *Checker) spmdSwitchStmt(s *syntax.SwitchStmt, ctxt stmtContext) {
 		// By checking assignment of x to an invisible temporary
 		// (as a compiler would), we get all the relevant checks.
 		check.assignment(&x, nil, "switch expression")
-		if x.mode != invalid && !Comparable(x.typ) && !hasNil(x.typ) {
-			check.errorf(&x, InvalidExprSwitch, "cannot switch on %s (%s is not comparable)", &x, x.typ)
-			x.mode = invalid
+		if x.mode() != invalid && !Comparable(x.typ()) && !hasNil(x.typ()) {
+			check.errorf(&x, InvalidExprSwitch, "cannot switch on %s (%s is not comparable)", &x, x.typ())
+			x.mode_ = invalid
 		}
 	} else {
 		// spec: "A missing switch expression is
 		// equivalent to the boolean value true."
-		x.mode = constant_
-		x.typ = Typ[Bool]
+		x.mode_ = constant_
+		x.typ_ = Typ[Bool]
 		x.val = constant.MakeBool(true)
 		// TODO(gri) should have a better position here
 		pos := s.Rbrace

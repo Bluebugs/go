@@ -29,18 +29,18 @@ func (check *Checker) handleSPMDComparison(x *operand, y *operand, op syntax.Ope
 
 	// At least one operand is varying, so result should be varying bool
 	// Set the result type to varying bool
-	x.typ = NewVarying(Typ[Bool])
+	x.typ_ = NewVarying(Typ[Bool])
 	return true
 }
 
 // isVaryingOperand checks if an operand has a varying type
 func (check *Checker) isVaryingOperand(x *operand) bool {
-	if x.typ == nil {
+	if x.typ() == nil {
 		return false
 	}
 
 	// Check if the type is explicitly an SPMD varying type
-	if spmdType, ok := x.typ.(*SPMDType); ok {
+	if spmdType, ok := x.typ().(*SPMDType); ok {
 		return spmdType.IsVarying()
 	}
 
@@ -67,32 +67,32 @@ func (check *Checker) handleSPMDBinaryExpr(x *operand, y *operand, op syntax.Ope
 	if isArithmetic(op) {
 		// Determine result element type - should be compatible with both operands
 		var elemType Type
-		
+
 		if xVarying {
-			if spmdType, ok := x.typ.(*SPMDType); ok {
+			if spmdType, ok := x.typ().(*SPMDType); ok {
 				elemType = spmdType.elem
 			}
 		}
-		
+
 		if yVarying && elemType == nil {
-			if spmdType, ok := y.typ.(*SPMDType); ok {
+			if spmdType, ok := y.typ().(*SPMDType); ok {
 				elemType = spmdType.elem
 			}
 		}
-		
+
 		// If we still don't have an element type, use the non-varying operand's type
 		if elemType == nil {
 			if xVarying {
 				// y is uniform, use y's type as element type
-				elemType = y.typ
+				elemType = y.typ()
 			} else {
-				// x is uniform, use x's type as element type  
-				elemType = x.typ
+				// x is uniform, use x's type as element type
+				elemType = x.typ()
 			}
 		}
 
 		if elemType != nil {
-			x.typ = NewVarying(elemType)
+			x.typ_ = NewVarying(elemType)
 			return true
 		}
 	}
@@ -121,13 +121,13 @@ func (check *Checker) handleSPMDIndexing(x *operand, indexOperand *operand) {
 	if !buildcfg.Experiment.SPMD {
 		return
 	}
-	
+
 	// Check if the index is varying (using already-evaluated operand)
 	if check.isVaryingOperand(indexOperand) {
 		// If the index is varying and the result type is not already varying,
 		// wrap it in a varying type
-		if x.typ != nil && !check.isVaryingType(x.typ) {
-			x.typ = NewVarying(x.typ)
+		if x.typ() != nil && !check.isVaryingType(x.typ()) {
+			x.typ_ = NewVarying(x.typ())
 		}
 	}
 }
