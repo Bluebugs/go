@@ -166,7 +166,7 @@ func (check *Checker) calculateVaryingTypeCapacity(spmdType *SPMDType) int64 {
 
 // getTypeSize returns the size in bytes of a type
 func (check *Checker) getTypeSize(typ Type) int64 {
-	switch t := under(typ).(type) {
+	switch t := typ.Underlying().(type) {
 	case *Basic:
 		switch t.kind {
 		case Bool, Uint8, Int8:

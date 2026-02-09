@@ -248,7 +248,7 @@ func (x *operand) isElementConvertible(sourceElem, targetElem Type) bool {
 	}
 
 	// Check if we need basic types for byte/rune conversions
-	targetBasic, targetOK := under(targetElem).(*Basic)
+	targetBasic, targetOK := targetElem.Underlying().(*Basic)
 
 	// Allow numeric conversions (same as Go conversion rules)
 	if isNumeric(sourceElem) && isNumeric(targetElem) {

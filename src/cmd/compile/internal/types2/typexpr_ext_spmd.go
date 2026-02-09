@@ -133,7 +133,14 @@ func (check *Checker) processSPMDType(spmdExpr *syntax.SPMDType, def *TypeName) 
 		typ = NewVaryingConstrained(elem, constraint)
 	}
 
-	setDefType(def, typ)
+	// Set the type on def if provided (for type declarations)
+	if def != nil {
+		if named := asNamed(def.typ); named != nil {
+			named.fromRHS = typ
+		} else if alias, ok := def.typ.(*Alias); ok {
+			alias.fromRHS = typ
+		}
+	}
 	return typ, true
 }
 
@@ -185,7 +192,7 @@ func (check *Checker) validateSPMDTypeRestrictions(typ Type) string {
 // calculateTypeSize returns the size in bytes of a single element type for capacity calculations
 // For constrained varying, this calculates the size of T in varying[n] T
 func (check *Checker) calculateTypeSize(t Type) int64 {
-	switch t := under(t).(type) {
+	switch t := t.Underlying().(type) {
 	case *Basic:
 		switch t.kind {
 		case Bool, Uint8, Int8:
@@ -218,7 +225,7 @@ func (check *Checker) calculateTypeSize(t Type) int64 {
 // calculateBaseTypeSize returns the size of the base element type, ignoring array dimensions
 // For constrained varying capacity validation: varying[n] [4]int -> size of int (not [4]int)
 func (check *Checker) calculateBaseTypeSize(t Type) int64 {
-	switch t := under(t).(type) {
+	switch t := t.Underlying().(type) {
 	case *Basic:
 		switch t.kind {
 		case Bool, Uint8, Int8:
@@ -271,8 +278,15 @@ func (check *Checker) handleSPMDOperationExpr(opExpr *syntax.Operation, def *Typ
 				} else {
 					spmdType = NewUniform(ptrType)
 				}
-				
-				setDefType(def, spmdType)
+
+				// Set the type on def if provided (for type declarations)
+				if def != nil {
+					if named := asNamed(def.typ); named != nil {
+						named.fromRHS = spmdType
+					} else if alias, ok := def.typ.(*Alias); ok {
+						alias.fromRHS = spmdType
+					}
+				}
 				return spmdType, true
 			}
 		}

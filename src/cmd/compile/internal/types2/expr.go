@@ -832,7 +832,7 @@ func (check *Checker) binary(x *operand, e syntax.Expr, lhs, rhs syntax.Expr, op
 
 	// Handle SPMD binary expression type propagation BEFORE type matching
 	if check.handleSPMDBinaryExpr(x, &y, op) {
-		x.mode = value
+		x.mode_ = value
 		return // SPMD handler set the appropriate type
 	}
 

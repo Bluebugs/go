@@ -28,7 +28,7 @@ func (check *Checker) conversion(x *operand, T Type) {
 		
 		if totalSize > maxConstrainedCapacity {
 			check.error(x, InvalidConstVal, "constrained varying capacity exceeded")
-			x.mode = invalid
+			x.mode_ = invalid
 			return
 		}
 	}
