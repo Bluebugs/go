@@ -62,30 +62,9 @@ func Count[T any](value varying T) uniform int {
 }
 
 // Broadcast takes a value from the specified lane and broadcasts it to all lanes.
-// COMPILER BUILTIN for regular varying types. Handles constrained varying via conversion.
+// COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
 func Broadcast[T any](value varying T, lane uniform int) varying T {
-	// Check if this is a constrained varying type (varying[])
-	// If so, convert to regular varying first, then call builtin
-	if isConstrainedVarying(value) {
-		// For constrained varying[], we need to:
-		// 1. Use FromConstrained to convert varying[] T to array of varying T
-		// 2. Apply broadcast operation to each varying T in the array
-		// 3. Combine results back into constrained varying[] format
-		
-		// Convert constrained varying to array of varying values
-		valueArray, valueMask := FromConstrained(value)
-		
-		// Apply builtin operation to the varying elements
-		// The builtin will handle the array of varying values
-		result := broadcastBuiltin(valueArray, lane)
-		
-		// For Phase 1.8, we can't reconstruct constrained varying properly
-		// so just return the result - Phase 2 will handle reconstruction
-		_ = valueMask  // Acknowledge mask for future use
-		return result
-	}
-	
-	// Regular varying - direct builtin call
+	// Direct builtin call - constrained varying[] support in Phase 2
 	return broadcastBuiltin(value, lane)
 }
 
@@ -97,30 +76,9 @@ func broadcastBuiltin[T any](value varying T, lane uniform int) varying T {
 
 // Rotate shifts values across lanes by the specified offset.
 // Positive offset rotates right, negative rotates left.
-// COMPILER BUILTIN for regular varying types. Handles constrained varying via conversion.
+// COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
 func Rotate[T any](value varying T, offset uniform int) varying T {
-	// Check if this is a constrained varying type (varying[])
-	// If so, convert to regular varying first, then call builtin
-	if isConstrainedVarying(value) {
-		// For constrained varying[], we need to:
-		// 1. Use FromConstrained to convert varying[] T to array of varying T
-		// 2. Apply rotate operation to each varying T in the array
-		// 3. Combine results back into constrained varying[] format
-		
-		// Convert constrained varying to array of varying values
-		valueArray, valueMask := FromConstrained(value)
-		
-		// Apply builtin operation to the varying elements
-		// The builtin will handle the array of varying values
-		result := rotateBuiltin(valueArray, offset)
-		
-		// For Phase 1.8, we can't reconstruct constrained varying properly
-		// so just return the result - Phase 2 will handle reconstruction
-		_ = valueMask  // Acknowledge mask for future use
-		return result
-	}
-	
-	// Regular varying - direct builtin call
+	// Direct builtin call - constrained varying[] support in Phase 2
 	return rotateBuiltin(value, offset)
 }
 
@@ -160,34 +118,9 @@ func ToConstrained[T any](data []varying T, mask []varying bool, target varying[
 }
 
 // Swizzle performs arbitrary permutation of lane values based on indices.
-// COMPILER BUILTIN for regular varying types. Handles constrained varying via conversion.
+// COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
 func Swizzle[T any](value varying T, indices varying int) varying T {
-	// Check if this is a constrained varying type (varying[])
-	// If so, convert to regular varying first, then call builtin
-	if isConstrainedVarying(value) {
-		// For constrained varying[], we need to:
-		// 1. Use FromConstrained to convert varying[] T to array of varying T
-		// 2. Apply swizzle operation to each varying T in the array
-		// 3. Combine results back into constrained varying[] format
-
-		// Convert constrained varying to array of varying values
-		valueArray, valueMask := FromConstrained(value)
-
-		// Convert indices if also constrained varying
-		indicesArray, indicesMask := FromConstrained(indices)
-
-		// Apply builtin operation to each pair of varying elements
-		results := make([]varying T, len(valueArray))
-		for i := range valueArray {
-			results[i] = swizzleBuiltin(valueArray[i], indicesArray[i])
-		}
-
-		_ = valueMask   // Acknowledge mask for future use
-		_ = indicesMask // Acknowledge mask for future use
-		return ToConstrained(results, valueMask, value)
-	}
-
-	// Regular varying - direct builtin call
+	// Direct builtin call - constrained varying[] support in Phase 2
 	return swizzleBuiltin(value, indices)
 }
 
@@ -198,26 +131,9 @@ func swizzleBuiltin[T any](value varying T, indices varying int) varying T {
 }
 
 // ShiftLeft performs per-lane left shift operation.
-// COMPILER BUILTIN for regular varying types. Handles constrained varying via conversion.
+// COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
 func ShiftLeft[T integer](value varying T, shift varying T) varying T {
-	// Check if this is a constrained varying type (varying[])
-	// If so, convert to regular varying first, then call builtin
-	if isConstrainedVarying(value) {
-		// Convert constrained varying to array of varying values
-		valueArray, valueMask := FromConstrained(value)
-
-		// Apply builtin operation to each varying element
-		// TODO Phase 2: Handle cross-element data transfer for constrained shift
-		results := make([]varying T, len(valueArray))
-		for i := range valueArray {
-			results[i] = shiftLeftBuiltin(valueArray[i], shift)
-		}
-
-		_ = valueMask // Acknowledge mask for future use
-		return ToConstrained(results, valueMask, value)
-	}
-
-	// Regular varying - direct builtin call
+	// Direct builtin call - constrained varying[] support in Phase 2
 	return shiftLeftBuiltin(value, shift)
 }
 
@@ -228,30 +144,9 @@ func shiftLeftBuiltin[T integer](value varying T, shift varying T) varying T {
 }
 
 // ShiftRight performs per-lane right shift operation.
-// COMPILER BUILTIN for regular varying types. Handles constrained varying via conversion.
+// COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
 func ShiftRight[T integer](value varying T, shift varying T) varying T {
-	// Check if this is a constrained varying type (varying[])
-	// If so, convert to regular varying first, then call builtin
-	if isConstrainedVarying(value) {
-		// For constrained varying[], we need to:
-		// 1. Use FromConstrained to convert varying[] T to array of varying T
-		// 2. Apply shift operation to each varying T in the array
-		// 3. Combine results back into constrained varying[] format
-
-		// Convert constrained varying to array of varying values
-		valueArray, valueMask := FromConstrained(value)
-
-		// Apply builtin operation to each varying element
-		results := make([]varying T, len(valueArray))
-		for i := range valueArray {
-			results[i] = shiftRightBuiltin(valueArray[i], shift)
-		}
-
-		_ = valueMask // Acknowledge mask for future use
-		return ToConstrained(results, valueMask, value)
-	}
-
-	// Regular varying - direct builtin call
+	// Direct builtin call - constrained varying[] support in Phase 2
 	return shiftRightBuiltin(value, shift)
 }
 
