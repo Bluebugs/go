@@ -560,6 +560,9 @@ func (state *assignState) allocateRegs(regs []RegIndex, t *types.Type) []RegInde
 			return state.allocateRegs(regs, synthString)
 		case types.TINTER:
 			return state.allocateRegs(regs, synthIface)
+		case types.TSPMD:
+			// SPMD types delegate to element type for ABI purposes
+			return state.allocateRegs(regs, t.Elem())
 		}
 	}
 	base.Fatalf("was not expecting type %s", t)

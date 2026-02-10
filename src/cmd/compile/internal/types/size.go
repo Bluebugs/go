@@ -392,6 +392,15 @@ func CalcSize(t *Type) {
 		CalcArraySize(t)
 		w = t.width
 
+	case TSPMD:
+		// SPMD types use element type size for now.
+		// Backend will expand to vector width during SSA generation.
+		CalcSize(t.Elem())
+		w = t.Elem().width
+		t.align = t.Elem().align
+		t.alg = t.Elem().alg
+		t.ptrBytes = t.Elem().ptrBytes
+
 	case TSLICE:
 		if t.Elem() == nil {
 			break

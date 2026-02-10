@@ -90,6 +90,11 @@ func set(t *types.Type, off int64, bv bitvec.BitVec, skip bool) {
 			set(f.Type, off+f.Offset, bv, skip)
 		}
 
+	case types.TSPMD:
+		// SPMD varying types don't contain pointers directly.
+		// Delegate to element type for GC pointer tracking.
+		set(t.Elem(), off, bv, skip)
+
 	default:
 		base.Fatalf("typebits.Set: unexpected type, %v", t)
 	}

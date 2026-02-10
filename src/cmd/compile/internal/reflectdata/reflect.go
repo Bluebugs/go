@@ -412,6 +412,7 @@ var kinds = []abi.Kind{
 	types.TCOMPLEX64:  abi.Complex64,
 	types.TCOMPLEX128: abi.Complex128,
 	types.TUNSAFEPTR:  abi.UnsafePointer,
+	types.TSPMD:       abi.Struct, // SPMD types represented as structs for ABI
 }
 
 func ABIKindOfType(t *types.Type) abi.Kind {
@@ -643,6 +644,10 @@ func needkeyupdate(t *types.Type) bool {
 				return true
 			}
 		}
+		return false
+
+	case types.TSPMD:
+		base.Fatalf("SPMD type not supported as map key")
 		return false
 
 	default:

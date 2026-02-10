@@ -812,6 +812,9 @@ func (e *eqSigBuilder) build(t *types.Type) {
 			e.flush(false)
 			e.r.WriteByte(sigArrayEnd)
 		}
+	case types.TSPMD:
+		// SPMD types delegate to element type for equality
+		e.build(t.Elem())
 	default:
 		base.Fatalf("eqSigBuilder %v", t)
 	}

@@ -64,6 +64,8 @@ const (
 	TSTRING
 	TUNSAFEPTR
 
+	TSPMD // SPMD varying type (lanes.Varying[T])
+
 	// pseudo-types for literals
 	TIDEAL // untyped numeric constants
 	TNIL
@@ -173,6 +175,7 @@ type Type struct {
 	// TPTR: Ptr
 	// TARRAY: *Array
 	// TSLICE: Slice
+	// TSPMD: *SPMD
 	// TSSA: string
 	extra any
 
@@ -394,6 +397,12 @@ type Array struct {
 	Bound int64 // number of elements; <0 if unknown yet
 }
 
+// SPMD contains Type fields specific to SPMD varying types.
+type SPMD struct {
+	Elem       *Type // element type
+	Constraint int64 // -1=unconstrained, 0=universal, >0=numeric
+}
+
 // Slice contains Type fields specific to slice types.
 type Slice struct {
 	Elem *Type // element type
@@ -529,6 +538,16 @@ func NewArray(elem *Type, bound int64) *Type {
 	}
 	if elem.NotInHeap() {
 		t.SetNotInHeap(true)
+	}
+	return t
+}
+
+// NewSPMD returns a new SPMD varying Type with the given element type and constraint.
+func NewSPMD(elem *Type, constraint int64) *Type {
+	t := newType(TSPMD)
+	t.extra = &SPMD{Elem: elem, Constraint: constraint}
+	if elem.HasShape() {
+		t.SetHasShape(true)
 	}
 	return t
 }
@@ -722,6 +741,13 @@ func SubstAny(t *Type, types *[]*Type) *Type {
 			t.extra = Slice{Elem: elem}
 		}
 
+	case TSPMD:
+		elem := SubstAny(t.Elem(), types)
+		if elem != t.Elem() {
+			t = t.copy()
+			t.extra = &SPMD{Elem: elem, Constraint: t.extra.(*SPMD).Constraint}
+		}
+
 	case TCHAN:
 		elem := SubstAny(t.Elem(), types)
 		if elem != t.Elem() {
@@ -802,6 +828,9 @@ func (t *Type) copy() *Type {
 	case TARRAY:
 		x := *t.extra.(*Array)
 		nt.extra = &x
+	case TSPMD:
+		x := *t.extra.(*SPMD)
+		nt.extra = &x
 	case TTUPLE, TSSA, TRESULTS:
 		base.Fatalf("ssa types cannot be copied")
 	}
@@ -881,7 +910,7 @@ func (t *Type) Key() *Type {
 }
 
 // Elem returns the type of elements of t.
-// Usable with pointers, channels, arrays, slices, and maps.
+// Usable with pointers, channels, arrays, slices, maps, and SPMD types.
 func (t *Type) Elem() *Type {
 	switch t.kind {
 	case TPTR:
@@ -894,9 +923,17 @@ func (t *Type) Elem() *Type {
 		return t.extra.(*Chan).Elem
 	case TMAP:
 		return t.extra.(*Map).Elem
+	case TSPMD:
+		return t.extra.(*SPMD).Elem
 	}
 	base.Fatalf("Type.Elem %s", t.kind)
 	return nil
+}
+
+// SPMDConstraint returns the SPMD constraint of type t.
+func (t *Type) SPMDConstraint() int64 {
+	t.wantEtype(TSPMD)
+	return t.extra.(*SPMD).Constraint
 }
 
 // ChanArgs returns the channel type for TCHANARGS type t.
@@ -1266,6 +1303,11 @@ func (t *Type) cmp(x *Type) Cmp {
 			return cmpForNe(t.NumElem() < x.NumElem())
 		}
 
+	case TSPMD:
+		if t.extra.(*SPMD).Constraint != x.extra.(*SPMD).Constraint {
+			return cmpForNe(t.extra.(*SPMD).Constraint < x.extra.(*SPMD).Constraint)
+		}
+
 	case TCHAN:
 		if t.ChanDir() != x.ChanDir() {
 			return cmpForNe(t.ChanDir() < x.ChanDir())
@@ -1512,6 +1554,8 @@ func (t *Type) NumComponents(countBlank componentsIncludeBlankFields) int64 {
 		return n
 	case TARRAY:
 		return t.NumElem() * t.Elem().NumComponents(countBlank)
+	case TSPMD:
+		return 1
 	}
 	return 1
 }
@@ -1535,6 +1579,8 @@ func (t *Type) SoleComponent() *Type {
 			return nil
 		}
 		return t.Elem().SoleComponent()
+	case TSPMD:
+		return t
 	}
 	return t
 }
@@ -1835,6 +1881,10 @@ func IsReflexive(t *Type) bool {
 			}
 		}
 		return true
+
+	case TSPMD:
+		base.Fatalf("SPMD type not supported as map key")
+		return false
 
 	default:
 		base.Fatalf("bad type for map key: %v", t)

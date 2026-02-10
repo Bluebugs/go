@@ -4631,6 +4631,9 @@ func (s *state) zeroVal(t *types.Type) *ssa.Value {
 		}
 	case t.IsSIMD():
 		return s.newValue0(ssa.OpZeroSIMD, t)
+	case t.Kind() == types.TSPMD:
+		// SPMD types delegate to element type's zero value for now
+		return s.zeroVal(t.Elem())
 	}
 	s.Fatalf("zero for type %v not implemented", t)
 	return nil

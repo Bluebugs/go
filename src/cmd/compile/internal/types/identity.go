@@ -142,6 +142,11 @@ cont:
 			return false
 		}
 
+	case TSPMD:
+		if t1.extra.(*SPMD).Constraint != t2.extra.(*SPMD).Constraint {
+			return false
+		}
+
 	case TCHAN:
 		if t1.ChanDir() != t2.ChanDir() {
 			return false

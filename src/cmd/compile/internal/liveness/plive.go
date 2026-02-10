@@ -1091,6 +1091,10 @@ func clobberWalk(b *ssa.Block, v *ir.Name, offset int64, t *types.Type) {
 			clobberWalk(b, v, offset+t1.Offset, t1.Type)
 		}
 
+	case types.TSPMD:
+		// SPMD types delegate to element type for clobbering
+		clobberWalk(b, v, offset, t.Elem())
+
 	default:
 		base.Fatalf("clobberWalk: unexpected type, %v", t)
 	}

@@ -522,18 +522,15 @@ func (r *reader) doTyp() *types.Type {
 		return types.NewSlice(r.typ())
 
 	case pkgbits.TypeSPMD:
-		// Read SPMD type data
 		isVarying := r.Bool()
-		var constraint int64
+		var constraint int64 = -1
 		if isVarying {
 			constraint = r.Int64()
 		}
 		elem := r.typ()
-		
-		// For now, return the element type since internal types don't support SPMD yet
-		// TODO: Add proper SPMD type support to cmd/compile/internal/types
-		_ = isVarying
-		_ = constraint
+		if isVarying {
+			return types.NewSPMD(elem, constraint)
+		}
 		return elem
 	case pkgbits.TypeStruct:
 		return r.structType()

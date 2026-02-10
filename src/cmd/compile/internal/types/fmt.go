@@ -382,6 +382,15 @@ func tconv2(b *bytes.Buffer, t *Type, verb rune, mode fmtMode, visited map[*Type
 		b.WriteByte(']')
 		tconv2(b, t.Elem(), 0, mode, visited)
 
+	case TSPMD:
+		b.WriteString("lanes.Varying[")
+		tconv2(b, t.Elem(), 'v', mode, visited)
+		if t.extra.(*SPMD).Constraint >= 0 {
+			b.WriteString(", ")
+			b.WriteString(strconv.FormatInt(t.extra.(*SPMD).Constraint, 10))
+		}
+		b.WriteByte(']')
+
 	case TSLICE:
 		b.WriteString("[]")
 		tconv2(b, t.Elem(), 0, mode, visited)
