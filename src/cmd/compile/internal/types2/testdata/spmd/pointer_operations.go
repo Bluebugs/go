@@ -80,8 +80,8 @@ func testPointerFunctionParameters() {
 		result := processPtrSPMD(vPtr)
 		process(result)
 
-		// Valid: pass varying pointer to uniform function
-		processPtrUniform(vPtr)  // Should work with first lane
+		// Invalid: varying pointer cannot be passed to uniform pointer parameter
+		processPtrUniform(vPtr) // ERROR "cannot use vPtr"
 	}
 }
 

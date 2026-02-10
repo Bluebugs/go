@@ -49,7 +49,9 @@ func privateVaryingFunc(x lanes.Varying[int]) lanes.Varying[int] {
 	return x * 2
 }
 
-func invalidSPMDFunction(x lanes.Varying[int]) lanes.Varying[int] { // ERROR "functions with varying parameters cannot contain go for loops"
+func invalidSPMDFunction( // ERROR "functions with varying parameters cannot contain go for loops"
+	x lanes.Varying[int],
+) lanes.Varying[int] {
 	go for i := range 10 {
 		x += i
 	}

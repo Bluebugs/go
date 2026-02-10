@@ -5,7 +5,9 @@ package spmdtest
 
 import "lanes"
 
-func PublicSPMDFunc(data lanes.Varying[int]) lanes.Varying[int] { // ERROR "public functions cannot have varying parameters"
+func PublicSPMDFunc( // ERROR "public functions cannot have varying parameters"
+	data lanes.Varying[int],
+) lanes.Varying[int] {
 	return data * 2
 }
 
@@ -23,7 +25,9 @@ func PublicRegularFunc(data int) int {
 	return data * 2
 }
 
-func invalidNestedGoFor(data lanes.Varying[int]) lanes.Varying[int] { // ERROR "functions with varying parameters cannot contain go for loops"
+func invalidNestedGoFor( // ERROR "functions with varying parameters cannot contain go for loops"
+	data lanes.Varying[int],
+) lanes.Varying[int] {
 	go for i := range 10 {
 		data += i
 	}
