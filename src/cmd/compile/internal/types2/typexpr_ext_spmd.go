@@ -13,125 +13,134 @@ import (
 	. "internal/types/errors"
 )
 
-// handleSPMDTypeExpr handles SPMD type expressions in the typInternal method.
-// Returns the resulting type and true if handled, or nil and false if not an SPMD type.
-func (check *Checker) handleSPMDTypeExpr(e syntax.Expr, def *TypeName) (Type, bool) {
+// handleSPMDIndexExpr checks if an IndexExpr is lanes.Varying[T] or lanes.Varying[T, N]
+// and creates the corresponding SPMDType. Returns (type, true) if handled.
+func (check *Checker) handleSPMDIndexExpr(e *syntax.IndexExpr, def *TypeName) (Type, bool) {
 	if !buildcfg.Experiment.SPMD {
 		return nil, false
 	}
 
-	// First try direct SPMD type
-	if spmdExpr, ok := e.(*syntax.SPMDType); ok {
-		return check.processSPMDType(spmdExpr, def)
+	if !check.isLanesVaryingExpr(e.X) {
+		return nil, false
 	}
-	
-	// Try to detect SPMD expressions that were parsed as operations in type switch contexts
-	// This handles cases like "varying *int" that got parsed as multiplication
-	if operationExpr, ok := e.(*syntax.Operation); ok {
-		return check.handleSPMDOperationExpr(operationExpr, def)
-	}
-	
-	// Handle bare SPMD keywords parsed as Name nodes
-	if nameExpr, ok := e.(*syntax.Name); ok {
-		if nameExpr.Value == "varying" || nameExpr.Value == "uniform" {
-			// Bare "varying" or "uniform" without a type - treat as error
-			check.errorf(e, NotAType, "incomplete SPMD type: %s requires element type", nameExpr.Value)
-			return Typ[Invalid], true
-		}
-	}
-	
-	return nil, false
+
+	return check.processLanesVaryingType(e, def)
 }
 
-// processSPMDType handles direct SPMDType syntax nodes
-func (check *Checker) processSPMDType(spmdExpr *syntax.SPMDType, def *TypeName) (Type, bool) {
-	var qualifier SPMDQualifier
-	var constraint int64 = -1
+// isLanesVaryingExpr checks if expr resolves to lanes.Varying
+func (check *Checker) isLanesVaryingExpr(x syntax.Expr) bool {
+	// Case 1: Package-qualified lanes.Varying (from importing packages)
+	if sel, ok := x.(*syntax.SelectorExpr); ok {
+		// Check the selector is "Varying"
+		if sel.Sel == nil || sel.Sel.Value != "Varying" {
+			return false
+		}
 
-	// Determine the qualifier
-	if syntax.IsUniformToken(spmdExpr.Qualifier) {
-		qualifier = UniformQualifier
-	} else if syntax.IsVaryingToken(spmdExpr.Qualifier) {
-		qualifier = VaryingQualifier
-	} else {
-		// Not a valid SPMD qualifier - let other handlers deal with it
-		return nil, false
+		// Check the package is "lanes"
+		name, ok := sel.X.(*syntax.Name)
+		if !ok {
+			return false
+		}
+
+		// Look up the name to see if it's an import of the "lanes" package
+		obj := check.lookup(name.Value)
+		if obj == nil {
+			return false
+		}
+
+		pkg, ok := obj.(*PkgName)
+		if !ok {
+			return false
+		}
+
+		if pkg.imported.path == "lanes" {
+			// Mark the import as used since we're handling lanes.Varying directly
+			check.usedPkgNames[pkg] = true
+			return true
+		}
+		return false
 	}
 
-	// Handle varying constraints
-	if qualifier == VaryingQualifier && spmdExpr.Constraint != nil {
-		// Check for universal constraint marker (varying[])
-		if name, ok := spmdExpr.Constraint.(*syntax.Name); ok && name.Value == "__universal_constraint__" {
-			// varying[] - universal constraint
-			constraint = 0
-		} else {
-			// varying[n] - numeric constraint
-			var x operand
-			check.expr(nil, &x, spmdExpr.Constraint)
-			if x.mode() != constant_ {
-				check.error(spmdExpr.Constraint, InvalidConstVal, "constraint must be compile-time constant")
-				return nil, false
-			}
-
-			if !isInteger(x.typ()) {
-				check.error(spmdExpr.Constraint, InvalidConstVal, "constraint must be an integer constant")
-				return nil, false
-			}
-
-			val, ok := constant.Int64Val(x.val)
-			if !ok {
-				check.error(spmdExpr.Constraint, InvalidConstVal, "constraint out of range")
-				return nil, false
-			}
-
-			if val < 1 {
-				check.error(spmdExpr.Constraint, InvalidConstVal, "constraint must be positive")
-				return nil, false
-			}
-
-			constraint = val
+	// Case 2: Unqualified Varying (from within the lanes package itself)
+	if name, ok := x.(*syntax.Name); ok && name.Value == "Varying" {
+		if check.pkg.path == "lanes" {
+			return true
 		}
 	}
 
-	// Type-check the element type first to validate capacity
-	elem := check.varType(spmdExpr.Elem)
+	return false
+}
+
+// processLanesVaryingType creates an SPMDType from lanes.Varying[T] or lanes.Varying[T, N]
+func (check *Checker) processLanesVaryingType(indexExpr *syntax.IndexExpr, def *TypeName) (Type, bool) {
+	args := syntax.UnpackListExpr(indexExpr.Index)
+
+	if len(args) < 1 || len(args) > 2 {
+		check.errorf(indexExpr, InvalidSPMDType, "lanes.Varying requires 1 or 2 type arguments, got %d", len(args))
+		return Typ[Invalid], true
+	}
+
+	// Type-check the element type (first argument)
+	elem := check.varType(args[0])
 	if !isValid(elem) {
-		// Return nil, false instead of Typ[Invalid] to avoid compiler crash
-		return nil, false
+		return Typ[Invalid], true
 	}
-
-	// Validate constrained varying capacity (512 bits = 64 bytes limit)
-	// Apply only to specific constrained varying cases that exceed capacity
-	if qualifier == VaryingQualifier && constraint > 0 {
-		// Calculate total capacity: constraint * element_size
-		elementSize := check.calculateTypeSize(elem)
-		totalSize := constraint * elementSize
-		
-		// Apply capacity validation based on specific test expectations
-		const maxConstrainedCapacity = 64 // 512 bits = 64 bytes
-		
-		if totalSize > maxConstrainedCapacity {
-			check.error(spmdExpr.Constraint, InvalidConstVal, "constrained varying capacity exceeded")
-			return nil, false
-		}
-	}
-	
-	// Note: For unconstrained varying with arrays (varying [n]T), we don't apply capacity limits
-	// because these are standard varying types applied to array types
 
 	// Validate SPMD type restrictions (pointers, maps, channels)
 	if err := check.validateSPMDTypeRestrictions(elem); err != "" {
-		check.errorf(spmdExpr.Elem, InvalidSPMDType, "%s", err)
-		return nil, false
+		check.errorf(args[0], InvalidSPMDType, "%s", err)
+		return Typ[Invalid], true
 	}
 
-	// Create the SPMD type
-	var typ *SPMDType
-	if qualifier == UniformQualifier {
-		typ = NewUniform(elem)
-	} else {
-		typ = NewVaryingConstrained(elem, constraint)
+	var constraint int64 = -1 // unconstrained by default
+
+	// Handle optional second argument: constraint N
+	if len(args) == 2 {
+		var x operand
+		check.expr(nil, &x, args[1])
+
+		if x.mode() != constant_ {
+			check.error(args[1], InvalidConstVal, "lanes.Varying constraint must be a compile-time constant")
+			return Typ[Invalid], true
+		}
+
+		if !isInteger(x.typ()) {
+			check.error(args[1], InvalidConstVal, "lanes.Varying constraint must be an integer constant")
+			return Typ[Invalid], true
+		}
+
+		val, ok := constant.Int64Val(x.val)
+		if !ok {
+			check.error(args[1], InvalidConstVal, "lanes.Varying constraint out of range")
+			return Typ[Invalid], true
+		}
+
+		if val == 0 {
+			// lanes.Varying[T, 0] means universal constraint (like old varying[] T)
+			constraint = 0
+		} else if val < 1 {
+			check.error(args[1], InvalidConstVal, "lanes.Varying constraint must be non-negative")
+			return Typ[Invalid], true
+		} else {
+			constraint = val
+		}
+
+		// Validate constrained varying capacity (512 bits = 64 bytes limit)
+		if constraint > 0 {
+			elementSize := check.calculateTypeSize(elem)
+			totalSize := constraint * elementSize
+
+			const maxConstrainedCapacity = 64 // 512 bits = 64 bytes
+
+			if totalSize > maxConstrainedCapacity {
+				check.error(args[1], InvalidConstVal, "constrained varying capacity exceeded")
+				return Typ[Invalid], true
+			}
+		}
 	}
+
+	// Create the SPMD type (always varying - uniform is implicit via regular Go types)
+	typ := NewVaryingConstrained(elem, constraint)
 
 	// Set the type on def if provided (for type declarations)
 	if def != nil {
@@ -141,6 +150,7 @@ func (check *Checker) processSPMDType(spmdExpr *syntax.SPMDType, def *TypeName) 
 			alias.fromRHS = typ
 		}
 	}
+
 	return typ, true
 }
 
@@ -254,46 +264,3 @@ func (check *Checker) calculateBaseTypeSize(t Type) int64 {
 	}
 }
 
-// handleSPMDOperationExpr detects SPMD type expressions that were parsed as operations
-// This handles cases like "varying *int" that get parsed as multiplication operations
-func (check *Checker) handleSPMDOperationExpr(opExpr *syntax.Operation, def *TypeName) (Type, bool) {
-	// Check for patterns like "varying *int" (parsed as multiplication)
-	if opExpr.Op == syntax.Mul {
-		// Check if left operand is a SPMD qualifier
-		if leftName, ok := opExpr.X.(*syntax.Name); ok {
-			if leftName.Value == "varying" || leftName.Value == "uniform" {
-				// This looks like "varying *SomeType" - get the element type
-				elemType := check.varType(opExpr.Y)
-				if !isValid(elemType) {
-					return nil, false
-				}
-				
-				// Create pointer to element type
-				ptrType := &Pointer{base: elemType}
-				
-				// Wrap in appropriate SPMD type
-				var spmdType Type
-				if leftName.Value == "varying" {
-					spmdType = NewVarying(ptrType)
-				} else {
-					spmdType = NewUniform(ptrType)
-				}
-
-				// Set the type on def if provided (for type declarations)
-				if def != nil {
-					if named := asNamed(def.typ); named != nil {
-						named.fromRHS = spmdType
-					} else if alias, ok := def.typ.(*Alias); ok {
-						alias.fromRHS = spmdType
-					}
-				}
-				return spmdType, true
-			}
-		}
-	}
-	
-	// Check for patterns like "*varying int" (trickier - need to examine parsed structure)
-	// This might be parsed differently depending on precedence
-	
-	return nil, false
-}

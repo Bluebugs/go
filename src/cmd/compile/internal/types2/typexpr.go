@@ -280,6 +280,10 @@ func (check *Checker) typInternal(e0 syntax.Expr, def *TypeName) (T Type) {
 		}
 
 	case *syntax.IndexExpr:
+		// Check for lanes.Varying[T] or lanes.Varying[T, N] before generic instantiation
+		if t, handled := check.handleSPMDIndexExpr(e, def); handled {
+			return t
+		}
 		check.verifyVersionf(e, go1_18, "type instantiation")
 		return check.instantiatedType(e.X, syntax.UnpackListExpr(e.Index))
 
@@ -388,18 +392,7 @@ func (check *Checker) typInternal(e0 syntax.Expr, def *TypeName) (T Type) {
 		typ.elem = check.varType(e.Elem)
 		return typ
 
-	case *syntax.SPMDType:
-		// Handle SPMD types directly  
-		if t, handled := check.handleSPMDTypeExpr(e0, def); handled {
-			return t
-		}
-
 	default:
-		// Try SPMD type handling first
-		if t, handled := check.handleSPMDTypeExpr(e0, def); handled {
-			return t
-		}
-		
 		check.errorf(e0, NotAType, "%s is not a type", e0)
 		check.use(e0)
 	}

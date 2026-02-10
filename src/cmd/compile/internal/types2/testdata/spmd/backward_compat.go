@@ -1,5 +1,6 @@
 // Code that uses "uniform" and "varying" as regular identifiers
 // This should parse and compile successfully in all circumstances
+// With package-based types, "uniform" and "varying" are no longer keywords
 package spmdTest
 
 // Using uniform and varying as variable names
@@ -38,7 +39,7 @@ func main() {
 	varying := 2.71
 
 	// Using them in function calls
-	process(uniform, varying)
+	processBC(uniform, varying)
 
 	// Using them as function calls
 	hideFunc()
@@ -55,6 +56,6 @@ func main() {
 	_ = c.varying
 }
 
-func process(a int, b varying float64) {
+func processBC(a int, b float64) {
 	_, _ = a, b
 }

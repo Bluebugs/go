@@ -3,25 +3,14 @@
 // license that can be found in the LICENSE file.
 
 // This file extends walk.go to support SPMD node types.
+// With package-based types (lanes.Varying[T]), SPMDType AST node no longer exists.
+// This file is kept as a placeholder for future SPMD-specific AST walking needs.
 
 package syntax
 
-import "internal/buildcfg"
-
-// spmdWalker extends the walker to handle SPMD node types.
-// This function is called from the default case in walker.node()
-// and will only work when SPMD experiment is enabled.
+// handleSPMDNode handles SPMD-specific AST nodes during tree walking.
+// Currently a no-op since SPMDType AST node was removed in the migration
+// to package-based types.
 func (w walker) handleSPMDNode(n Node) bool {
-	if !buildcfg.Experiment.SPMD {
-		return false
-	}
-
-	switch n := n.(type) {
-	case *SPMDType:
-		// Walk the element type
-		w.node(n.Elem)
-		return true
-	default:
-		return false
-	}
+	return false
 }

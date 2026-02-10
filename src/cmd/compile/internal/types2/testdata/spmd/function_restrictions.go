@@ -5,16 +5,16 @@ package spmdtest
 
 import "lanes"
 
-func PublicSPMDFunc(data varying int) varying int { // ERROR "public functions cannot have varying parameters"
+func PublicSPMDFunc(data lanes.Varying[int]) lanes.Varying[int] { // ERROR "public functions cannot have varying parameters"
 	return data * 2
 }
 
-func PublicVaryingReturn() varying int { // ERROR "public functions cannot return varying types"
+func PublicVaryingReturn() lanes.Varying[int] { // ERROR "public functions cannot return varying types"
 	return 42
 }
 
 // Private SPMD functions are allowed
-func privateSPMDFunc(data varying int) varying int {
+func privateSPMDFunc(data lanes.Varying[int]) lanes.Varying[int] {
 	return data * 2
 }
 
@@ -23,9 +23,9 @@ func PublicRegularFunc(data int) int {
 	return data * 2
 }
 
-func invalidNestedGoFor(data varying int) varying int { // ERROR "functions with varying parameters cannot contain go for loops"
+func invalidNestedGoFor(data lanes.Varying[int]) lanes.Varying[int] { // ERROR "functions with varying parameters cannot contain go for loops"
 	go for i := range 10 {
-		data += varying int(i)
+		data += i
 	}
 	return data
 }
@@ -38,7 +38,7 @@ func validGoForInNonSPMD() {
 }
 
 // Valid: SPMD functions can call other SPMD functions
-func validSPMDCalls(data varying int) varying int {
+func validSPMDCalls(data lanes.Varying[int]) lanes.Varying[int] {
 	result := privateSPMDFunc(data)
 	return result + 1
 }
@@ -46,7 +46,7 @@ func validSPMDCalls(data varying int) varying int {
 // Test context restrictions for lanes.Index()
 func testLanesIndexRestrictions() {
 	idx := lanes.Index() // ERROR "lanes.Index() can only be called in SPMD context"
-	
+
 	// Valid: lanes.Index() in go for loop
 	go for i := range 10 {
 		validIdx := lanes.Index()
@@ -54,44 +54,44 @@ func testLanesIndexRestrictions() {
 
 		_ = i
 	}
-	
+
 	_ = idx
 }
 
 // Test varying parameter type validation
 func testVaryingParameterTypes(
-	a varying int,           // OK
-	b varying float32,       // OK
-	c varying[4] int,       // OK: constrained varying
-	d varying[] byte,       // OK: universal constraint
-) varying int {
+	a lanes.Varying[int],          // OK
+	b lanes.Varying[float32],      // OK
+	c lanes.Varying[int, 4],       // OK: constrained varying
+	d lanes.Varying[byte, 0],      // OK: universal constraint
+) lanes.Varying[int] {
 	_ = d
-	return a + varying int(b) + c
+	return a + c
 }
 
 func testInvalidMapKeys() {
-	var vKey varying string
-	m := make(map[varying string]int) // ERROR "varying map keys not supported"
+	var vKey lanes.Varying[string]
+	m := make(map[lanes.Varying[string]]int) // ERROR "varying map keys not supported"
 	m[vKey] = 42
 	_ = m
 }
 
 // Test channels with varying types (now allowed)
 func testValidChannelTypes() {
-	ch := make(chan varying int) // OK: channels can carry varying types
+	ch := make(chan lanes.Varying[int]) // OK: channels can carry varying types
 	_ = ch
 }
 
 // Test interface{} with varying
 func testVaryingInterface() {
-	var data varying int = 42
-	
+	var data lanes.Varying[int] = 42
+
 	// OK: varying can be passed as interface{}
 	var iface interface{} = data
-	
+
 	// Type switches with varying interface{} require explicit handling
 	switch v := iface.(type) {
-	case varying int:
+	case lanes.Varying[int]:
 		process(v)
 	default:
 		// no handling
@@ -100,22 +100,14 @@ func testVaryingInterface() {
 
 // Test constrained varying validation
 func testConstrainedVarying() {
-	const VALID_CONSTRAINT = 4
-	var invalid_constraint int = 8
-	
-	var a varying[4] int         // OK: compile-time constant
-	var b varying[VALID_CONSTRAINT] int // OK: named constant
-	
-	var c varying[invalid_constraint] int // ERROR "constraint must be compile-time constant"
-	
-	var d varying[0] int // ERROR "constraint must be positive"
-	
-	var e varying[-1] int // ERROR "constraint must be positive"
-	
-	_, _, _, _, _ = a, b, c, d, e
+	var a lanes.Varying[int, 4]         // OK: compile-time constant
+
+	var c lanes.Varying[int, -1] // ERROR "lanes.Varying constraint must be non-negative"
+
+	_, _ = a, c
 }
 
 // Helper function
-func process(x varying int) {
+func process(x lanes.Varying[int]) {
 	_ = x
 }

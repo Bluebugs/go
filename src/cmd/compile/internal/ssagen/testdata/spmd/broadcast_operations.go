@@ -3,20 +3,23 @@
 // Test SSA generation for uniform-to-varying broadcasts
 package spmdtest
 
-import "lanes"
+import (
+	"lanes"
+	"reduce"
+)
 
 // Test automatic uniform-to-varying broadcast in arithmetic
 func testAutomaticBroadcastSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast for automatic conversion)
 	// EXPECT SSA: OpVectorAdd (for arithmetic with broadcasted uniform)
-	var uniformVal uniform int32 = 42
-	var varyingVal varying int32 = 10
-	
+	var uniformVal int32 = 42
+	var varyingVal lanes.Varying[int32] = 10
+
 	// Uniform should be automatically broadcasted
-	var result varying int32 = uniformVal + varyingVal
-	var result2 varying int32 = varyingVal * uniformVal
-	var result3 varying int32 = uniformVal - varyingVal
-	
+	var result lanes.Varying[int32] = uniformVal + varyingVal
+	var result2 lanes.Varying[int32] = varyingVal * uniformVal
+	var result3 lanes.Varying[int32] = uniformVal - varyingVal
+
 	process(result + result2 + result3)
 }
 
@@ -24,12 +27,12 @@ func testAutomaticBroadcastSSA() {
 func testExplicitBroadcastSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast)
 	// EXPECT SSA: OpVectorMul (for arithmetic with explicitly broadcasted value)
-	var uniformVal uniform int32 = 100
-	
+	var varyingVal lanes.Varying[int32] = 100
+
 	// Explicit broadcast should generate lanes.Broadcast call
-	var broadcasted varying int32 = lanes.Broadcast(uniformVal, 0)
-	var result varying int32 = broadcasted * varying int32(2)
-	
+	var broadcasted lanes.Varying[int32] = lanes.Broadcast(varyingVal, 0)
+	var result lanes.Varying[int32] = broadcasted * lanes.Varying[int32](2)
+
 	process(result)
 }
 
@@ -37,14 +40,14 @@ func testExplicitBroadcastSSA() {
 func testLaneBroadcastSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast with lane parameter)
 	// EXPECT SSA: OpVectorExtractLane (for extracting specific lane)
-	var varyingVal varying int32 = varying int32(lanes.Index()) + varying int32(10)
-	
+	var varyingVal lanes.Varying[int32] = lanes.Varying[int32](lanes.Index()) + lanes.Varying[int32](10)
+
 	// Broadcast from different lanes
-	var broadcast0 varying int32 = lanes.Broadcast(varyingVal, 0) // Broadcast from lane 0
-	var broadcast1 varying int32 = lanes.Broadcast(varyingVal, 1) // Broadcast from lane 1
-	var broadcast2 varying int32 = lanes.Broadcast(varyingVal, 2) // Broadcast from lane 2
-	
-	var result varying int32 = broadcast0 + broadcast1 + broadcast2
+	var broadcast0 lanes.Varying[int32] = lanes.Broadcast(varyingVal, 0) // Broadcast from lane 0
+	var broadcast1 lanes.Varying[int32] = lanes.Broadcast(varyingVal, 1) // Broadcast from lane 1
+	var broadcast2 lanes.Varying[int32] = lanes.Broadcast(varyingVal, 2) // Broadcast from lane 2
+
+	var result lanes.Varying[int32] = broadcast0 + broadcast1 + broadcast2
 	process(result)
 }
 
@@ -52,47 +55,47 @@ func testLaneBroadcastSSA() {
 func testConditionalBroadcastSSA() {
 	// EXPECT SSA: OpSelect (for conditional broadcast)
 	// EXPECT SSA: OpCall (to lanes.Broadcast within condition)
-	var uniformCondition uniform bool = true
-	var uniformValue uniform int32 = 50
-	var varyingValue varying int32 = 25
-	
-	var result varying int32
+	var uniformCondition bool = true
+	var uniformValue int32 = 50
+	var varyingValue lanes.Varying[int32] = 25
+
+	var result lanes.Varying[int32]
 	if uniformCondition {
 		// Uniform broadcast in conditional branch
 		result = uniformValue + varyingValue
 	} else {
-		result = varyingValue * varying int32(2)
+		result = varyingValue * lanes.Varying[int32](2)
 	}
-	
+
 	process(result)
 }
 
 // Test broadcast with function parameters
 func testParameterBroadcastSSA() {
 	// EXPECT SSA: OpCall (with automatic broadcast for uniform parameters)
-	var uniformVal uniform int32 = 75
-	var varyingVal varying int32 = 30
-	
+	var uniformVal int32 = 75
+	var varyingVal lanes.Varying[int32] = 30
+
 	// Call SPMD function with mixed parameters
 	result := mixedParameterFunction(uniformVal, varyingVal)
 	process(result)
 }
 
-func mixedParameterFunction(uniform uniform int32, varying varying int32) varying int32 {
+func mixedParameterFunction(u int32, v lanes.Varying[int32]) lanes.Varying[int32] {
 	// EXPECT SSA: uniform parameter automatically broadcasted
 	// EXPECT SSA: OpVectorAdd (for arithmetic with broadcasted uniform)
-	return uniform + varying * varying int32(2)
+	return u + v*lanes.Varying[int32](2)
 }
 
 // Test broadcast in go for loop context
 func testGoForBroadcastSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast within loop)
 	// EXPECT SSA: OpVectorAdd (for arithmetic with broadcasted values)
-	var uniformBase uniform int32 = 100
-	
+	var uniformBase int32 = 100
+
 	go for i := range 8 {
 		// Uniform should be broadcasted within loop
-		var loopResult varying int32 = uniformBase + varying int32(i)
+		var loopResult lanes.Varying[int32] = uniformBase + lanes.Varying[int32](i)
 		process(loopResult)
 	}
 }
@@ -101,13 +104,13 @@ func testGoForBroadcastSSA() {
 func testBroadcastTypeConversionSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast)
 	// EXPECT SSA: OpVectorCvt (for type conversion of broadcasted value)
-	var uniformInt uniform int32 = 42
-	var varyingFloat varying float32 = 3.14
-	
+	var uniformInt int32 = 42
+	var varyingFloat lanes.Varying[float32] = 3.14
+
 	// Type conversion with broadcast
-	var converted varying float32 = varying float32(uniformInt) + varyingFloat
-	var result varying int32 = varying int32(converted)
-	
+	var converted lanes.Varying[float32] = lanes.Varying[float32](uniformInt) + varyingFloat
+	var result lanes.Varying[int32] = lanes.Varying[int32](converted)
+
 	process(result)
 }
 
@@ -115,27 +118,25 @@ func testBroadcastTypeConversionSSA() {
 func testBroadcastMemoryOpsSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast)
 	// EXPECT SSA: OpVectorStore (for storing broadcasted values)
-	var data varying int32
-	var uniformValue uniform int32 = 999
-	
-	go for i := range data {
+	var uniformValue int32 = 999
+
+	go for i := range 16 {
 		// Store broadcasted uniform to varying indices
-		data[i] = int32(uniformValue + varying int32(i))
+		var data lanes.Varying[int32] = uniformValue + lanes.Varying[int32](i)
+		process(data)
 	}
-	
-	process(data)
 }
 
 // Test broadcast with reduction operations
 func testBroadcastWithReduceSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast and reduce.Add)
-	var uniformVal uniform int32 = 10
-	var varyingVal varying int32 = varying int32(lanes.Index()) * 5
-	
+	var uniformVal int32 = 10
+	var varyingVal lanes.Varying[int32] = lanes.Varying[int32](lanes.Index()) * 5
+
 	// Combine broadcast with reduction
-	var combined varying int32 = uniformVal + varyingVal
-	var sum uniform int32 = reduce.Add(combined)
-	
+	var combined lanes.Varying[int32] = uniformVal + varyingVal
+	var sum int32 = reduce.Add(combined)
+
 	process(sum)
 }
 
@@ -143,12 +144,12 @@ func testBroadcastWithReduceSSA() {
 func testNestedBroadcastSSA() {
 	// EXPECT SSA: multiple OpCall (to lanes.Broadcast)
 	// EXPECT SSA: OpVectorAdd (for nested arithmetic)
-	var uniform1 uniform int32 = 20
-	var uniform2 uniform int32 = 30
-	var varyingVal varying int32 = 5
-	
+	var uniform1 int32 = 20
+	var uniform2 int32 = 30
+	var varyingVal lanes.Varying[int32] = 5
+
 	// Nested operations with multiple broadcasts
-	var result varying int32 = (uniform1 + uniform2) * varyingVal + uniform1
+	var result lanes.Varying[int32] = (uniform1 + uniform2) * varyingVal + uniform1
 	process(result)
 }
 
@@ -156,17 +157,17 @@ func testNestedBroadcastSSA() {
 func testComplexBroadcastExpressionSSA() {
 	// EXPECT SSA: OpCall (to lanes.Broadcast for multiple uniforms)
 	// EXPECT SSA: complex vector arithmetic tree
-	var a uniform int32 = 5
-	var b uniform float32 = 2.5
-	var c varying int32 = 10
-	var d varying float32 = 1.5
-	
+	var a int32 = 5
+	var b float32 = 2.5
+	var c lanes.Varying[int32] = 10
+	var d lanes.Varying[float32] = 1.5
+
 	// Complex expression requiring multiple broadcasts
-	var result varying float32 = (varying float32(a) * b + varying float32(c)) / (d + varying float32(a))
+	var result lanes.Varying[float32] = (lanes.Varying[float32](a)*b + lanes.Varying[float32](c)) / (d + lanes.Varying[float32](a))
 	process(result)
 }
 
 // Helper function
-func process(x varying int) {
+func process(x lanes.Varying[int]) {
 	_ = x
 }

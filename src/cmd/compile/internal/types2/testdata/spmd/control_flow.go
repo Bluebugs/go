@@ -3,12 +3,15 @@
 // Test control flow restrictions in SPMD contexts
 package spmdtest
 
-import "reduce"
+import (
+	"lanes"
+	"reduce"
+)
 
 // Test go for loop restrictions (ISPC-based approach)
 func testGoForRestrictions() {
 	threshold := 7
-	
+
 	// Valid go for loops - continue always allowed
 	go for i := range 10 {
 		if i > 5 {
@@ -16,7 +19,7 @@ func testGoForRestrictions() {
 		}
 		process(i)
 	}
-	
+
 	// ALLOWED: return/break under uniform conditions
 	go for i := range 10 {
 		if threshold < 0 {
@@ -27,21 +30,21 @@ func testGoForRestrictions() {
 		}
 		process(i)
 	}
-	
+
 	go for i := range 10 {
 		if i > 5 { // varying condition
 			break  // ERROR "break statement not allowed under varying conditions in SPMD for loop"
 		}
 		process(i)
 	}
-	
+
 	go for i := range 10 {
 		if i < 3 { // varying condition
 			return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 		}
 		process(i)
 	}
-	
+
 	go for i := range 10 {
 		go for j := range 5 { // ERROR "nested `go for` loop (prohibited for now)"
 			process(i + j)
@@ -53,31 +56,31 @@ func testGoForRestrictions() {
 // Test mask alteration scenarios - continue in varying context affects subsequent uniform conditions
 func testMaskAlterationScenarios() {
 	threshold := 7
-	mode := uniform int(1)
-	
+	mode := 1
+
 	go for i := range 10 {
 		if i > 5 { // varying condition
 			continue  // OK: continue always allowed, but alters mask
 		}
-		
+
 		// Mask has been altered by previous continue in varying context
 		if mode == 1 { // uniform condition, but mask is altered
 			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		}
 		process(i)
 	}
-	
+
 	go for i := range 10 {
 		if i < 3 { // varying condition
 			continue  // Alters mask
 		}
-		
+
 		if threshold > 0 { // uniform condition, but mask altered
 			break // ERROR "break statement not allowed after continue in varying context in SPMD for loop"
 		}
 		process(i)
 	}
-	
+
 	// Complex mask alteration scenario
 	go for i := range 10 {
 		if i > 2 { // varying condition
@@ -85,7 +88,7 @@ func testMaskAlterationScenarios() {
 				continue  // Alters mask - some lanes skip remaining
 			}
 		}
-		
+
 		if mode > 0 { // uniform condition on remaining active lanes only
 			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
 		}
@@ -105,7 +108,7 @@ func testRegularForLoops() {
 		}
 		process(i)
 	}
-	
+
 	// Nested regular for loops are fine
 	for i := 0; i < 10; i++ {
 		for j := 0; j < 5; j++ {
@@ -119,14 +122,14 @@ func testRegularForLoops() {
 
 // Test mixed control flow (go for with regular for inside)
 func testMixedControlFlow() {
-	mode := uniform int(1)
-	
+	mode := 1
+
 	go for i := range 10 {
 		// ALLOWED: Uniform return/break at go for level
 		if mode < 0 {
 			return // OK: uniform condition
 		}
-		
+
 		// Regular for loop inside go for is allowed
 		for j := 0; j < 5; j++ {
 			if j > 2 {
@@ -134,11 +137,11 @@ func testMixedControlFlow() {
 			}
 			process(int(i) + j)
 		}
-		
+
 		if i > 5 { // varying condition
 			return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 		}
-		
+
 		// But another go for is not allowed
 		go for k := range 3 { // ERROR "nested `go for` loop (prohibited for now)"
 			process(int(i) + k)
@@ -148,22 +151,22 @@ func testMixedControlFlow() {
 
 // Test nested varying conditions (complex cases)
 func testNestedVaryingConditions() {
-	mode := uniform int(1)
+	mode := 1
 	data := []int{1, 2, 3, 4, 5, 6, 7, 8}
-	
+
 	go for i := range len(data) {
 		// Uniform outer condition - return/break OK here
 		if mode == 1 { // uniform condition
 			if data[i] > 5 { // varying condition - now return/break forbidden
 				return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 			}
-			
-			// ALLOWED: Still under uniform condition only  
+
+			// ALLOWED: Still under uniform condition only
 			if mode == 2 {
 				return // OK: no varying conditions in scope
 			}
 		}
-		
+
 		// Complex nesting scenarios
 		if mode > 0 { // uniform condition
 			if data[i] > 3 { // varying condition
@@ -172,7 +175,7 @@ func testNestedVaryingConditions() {
 				}
 				continue // OK: continue always allowed
 			}
-			
+
 			// FORBIDDEN: mask altered by previous continue in varying context
 			if mode > 50 {
 				break // ERROR "break statement not allowed after continue in varying context in SPMD for loop"
@@ -184,18 +187,18 @@ func testNestedVaryingConditions() {
 // Test conditional control flow with varying
 func testVaryingControlFlow() {
 	go for i := range 8 {
-		var condition varying bool = i > 4
-		
+		var condition lanes.Varying[bool] = i > 4
+
 		// Varying conditionals should work
 		if condition {
 			process(i)
 		}
-		
+
 		// uniform conditions in loops
 		if reduce.Any(condition) {
 			break // OK: break based on reduction to uniform result
 		}
-		
+
 		// Complex uniform conditions
 		if reduce.All(i < 2) {
 			// All lanes satisfy condition
@@ -206,19 +209,19 @@ func testVaryingControlFlow() {
 
 // Test switch statements with varying
 func testVaryingSwitchStatements() {
-	mode := uniform int(1)
-	
+	mode := 1
+
 	go for i := range 16 {
 		// ALLOWED: Switch on uniform value
 		switch mode {
 		case 1:
 			return // OK: uniform switch allows return
-		case 2: 
+		case 2:
 			break // OK: uniform switch allows break
 		default:
 			continue // Always OK
 		}
-		
+
 		switch i % 4 { // varying condition
 		case 0:
 			return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
@@ -227,8 +230,8 @@ func testVaryingSwitchStatements() {
 		default:
 			continue // OK: continue always allowed
 		}
-		
-		var condition varying bool = i > 8
+
+		var condition lanes.Varying[bool] = i > 8
 		switch condition { // varying condition
 		case true:
 			return // ERROR "return statement not allowed after continue in varying context in SPMD for loop"
@@ -242,7 +245,7 @@ func testVaryingSwitchStatements() {
 func testSelectRestrictions() {
 	ch1 := make(chan int)
 	ch2 := make(chan int)
-	
+
 	// Regular select should work outside SPMD context
 	select {
 	case val := <-ch1:
@@ -252,7 +255,7 @@ func testSelectRestrictions() {
 	default:
 		// default case
 	}
-	
+
 	go for i := range 4 {
 		select { // ERROR "select statements not supported in SPMD context"
 		case val := <-ch1:
@@ -271,7 +274,7 @@ func testGotoRestrictions() {
 	process(1)
 regularLabel:
 	process(2)
-	
+
 	go for i := range 4 {
 		if i > 2 {
 			goto spmdLabel // ERROR "goto statements not supported in SPMD context"
@@ -283,39 +286,38 @@ regularLabel:
 }
 
 // Test return statements in SPMD functions
-func testSPMDReturns(data varying int) varying int {
+func testSPMDReturns(data lanes.Varying[int]) lanes.Varying[int] {
 	// Simple return is OK
 	return data * 2
 }
 
-func testSPMDConditionalReturns(data varying int, threshold uniform int) varying int {
+func testSPMDConditionalReturns(data lanes.Varying[int], threshold int) lanes.Varying[int] {
 	// ALLOWED: Uniform conditions in SPMD functions
 	if threshold < 0 {
 		return data / 2  // OK: uniform condition
 	}
-	
+
 	if data > 5 { // varying condition - conditional returns not yet implemented
 		return data * 2 // Future: conditional return with varying condition not supported
 	}
-	
+
 	// Reduction produces uniform result even if input is varying as return and function call will have the same mask, we are ok in this case
 	if reduce.Any(data > 10) {
 		return data / 2  // OK: uniform result from reduce operation
 	}
-	
+
 	return data
 }
 
 // Test edge cases with reduce operations
 func testReduceOperationEdgeCases() {
 	data := []int{1, 2, 3, 4, 5}
-	
+
 	go for i := range len(data) {
 		// Edge case: reduce produces uniform result but from varying input
 		varyingCondition := data[i] > 3
-		
-		// This is considered uniform context since their is no alteration of the control flow mask prior to this point
-		// aka no continue of the sort nor inside a if
+
+		// This is considered uniform context since there is no alteration of the control flow mask prior to this point
 		if reduce.Any(varyingCondition) { // uniform result with no varying context
 			return // OK: pure uniform condition
 		}
@@ -326,10 +328,10 @@ func testReduceOperationEdgeCases() {
 			if reduce.Any(varyingCondition) {
 				return // ERROR "return statement not allowed under varying conditions in SPMD for loop"
 			}
-		}		
-		
+		}
+
 		// Pure uniform condition with reduce is OK
-		uniformCondition := uniform bool(true)
+		uniformCondition := true
 		if reduce.All(uniformCondition) {
 			return // OK: pure uniform condition
 		}
@@ -352,6 +354,6 @@ func testReduceOperationEdgeCases() {
 }
 
 // Helper function
-func process(x varying int) {
+func process(x lanes.Varying[int]) {
 	_ = x
 }

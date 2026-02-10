@@ -3,6 +3,8 @@
 // Test SSA generation for varying arithmetic operations
 package spmdtest
 
+import "lanes"
+
 // Test basic varying arithmetic generates vector operations
 func testBasicVaryingArithmeticSSA() {
 	// EXPECT SSA: OpVectorAdd (for varying addition)
@@ -10,14 +12,14 @@ func testBasicVaryingArithmeticSSA() {
 	// EXPECT SSA: OpVectorSub (for varying subtraction)
 	// EXPECT SSA: OpVectorDiv (for varying division)
 	go for i := range 42 {
-		var a varying int32 = 10 + i
-		var b varying int32 = 20
-	
-		var sum varying int32 = a + b
-		var product varying int32 = a * b
-		var difference varying int32 = b - a
-		var quotient varying int32 = b / a
-	
+		var a lanes.Varying[int32] = 10 + i
+		var b lanes.Varying[int32] = 20
+
+		var sum lanes.Varying[int32] = a + b
+		var product lanes.Varying[int32] = a * b
+		var difference lanes.Varying[int32] = b - a
+		var quotient lanes.Varying[int32] = b / a
+
 		process(sum + product + difference + quotient)
 	}
 }
@@ -29,14 +31,14 @@ func testVaryingFloatArithmeticSSA() {
 	// EXPECT SSA: OpVectorSub (for f32x4 subtraction)
 	// EXPECT SSA: OpVectorDiv (for f32x4 division)
 	go for i := range 10 {
-		var a varying float32 = 3.14 + i
-		var b varying float32 = 2.71
-	
-		var sum varying float32 = a + b
-		var product varying float32 = a * b
-		var difference varying float32 = a - b
-		var quotient varying float32 = a / b
-	
+		var a lanes.Varying[float32] = 3.14 + i
+		var b lanes.Varying[float32] = 2.71
+
+		var sum lanes.Varying[float32] = a + b
+		var product lanes.Varying[float32] = a * b
+		var difference lanes.Varying[float32] = a - b
+		var quotient lanes.Varying[float32] = a / b
+
 		process(sum + product + difference + quotient)
 	}
 }
@@ -46,13 +48,13 @@ func testMixedTypeArithmeticSSA() {
 	// EXPECT SSA: OpVectorCvt (for type conversions)
 	// EXPECT SSA: OpVectorAdd (for converted arithmetic)
 	go for intVal := range 50 {
-		var floatVal varying float32 = 3.14
-	
+		var floatVal lanes.Varying[float32] = 3.14
+
 		// Type conversion should generate vector conversion operations
-		var mixed varying float32 = varying float32(intVal) + floatVal
-		var converted varying int32 = varying int32(floatVal) + intVal
-	
-		process(varying int32(mixed) + converted)
+		var mixed lanes.Varying[float32] = lanes.Varying[float32](intVal) + floatVal
+		var converted lanes.Varying[int32] = lanes.Varying[int32](floatVal) + intVal
+
+		process(lanes.Varying[int32](mixed) + converted)
 	}
 }
 
@@ -64,9 +66,9 @@ func testUniformBroadcastArithmeticSSA() {
 
 	go for varyingVal := range 100 {
 		// Uniform should be automatically broadcasted
-		var result varying int32 = uniformVal + varyingVal
-		var result2 varying int32 = varyingVal * uniformVal
-	
+		var result lanes.Varying[int32] = uniformVal + varyingVal
+		var result2 lanes.Varying[int32] = varyingVal * uniformVal
+
 		process(result + result2)
 	}
 }
@@ -79,15 +81,15 @@ func testVaryingBitwiseSSA() {
 	// EXPECT SSA: OpVectorShl (for varying left shift)
 	// EXPECT SSA: OpVectorShr (for varying right shift)
 	go for a := range 32 {
-		var b varying int32 = 0x00FF
-		var shift varying int32 = 4
-	
-		var andResult varying int32 = a & b
-		var orResult varying int32 = a | b
-		var xorResult varying int32 = a ^ b
-		var leftShift varying int32 = a << shift
-		var rightShift varying int32 = a >> shift
-	
+		var b lanes.Varying[int32] = 0x00FF
+		var shift lanes.Varying[int32] = 4
+
+		var andResult lanes.Varying[int32] = a & b
+		var orResult lanes.Varying[int32] = a | b
+		var xorResult lanes.Varying[int32] = a ^ b
+		var leftShift lanes.Varying[int32] = a << shift
+		var rightShift lanes.Varying[int32] = a >> shift
+
 		process(andResult + orResult + xorResult + leftShift + rightShift)
 	}
 }
@@ -100,14 +102,14 @@ func testVaryingComparisonsSSA() {
 	// EXPECT SSA: OpVectorLeq (for varying less than or equal)
 	// EXPECT SSA: OpVectorGeq (for varying greater than or equal)
 	go for a := range 42 {
-		var b varying int32 = 20
-	
-		var eq varying bool = a == b
-		var lt varying bool = a < b
-		var gt varying bool = a > b
-		var leq varying bool = a <= b
-		var geq varying bool = a >= b
-	
+		var b lanes.Varying[int32] = 20
+
+		var eq lanes.Varying[bool] = a == b
+		var lt lanes.Varying[bool] = a < b
+		var gt lanes.Varying[bool] = a > b
+		var leq lanes.Varying[bool] = a <= b
+		var geq lanes.Varying[bool] = a >= b
+
 		// Use comparisons in conditional to test mask generation
 		if eq || lt || gt || leq || geq {
 			process(a)
@@ -120,11 +122,11 @@ func testVaryingMemoryOpsSSA() {
 	// EXPECT SSA: OpVectorLoad (for varying array access)
 	// EXPECT SSA: OpVectorStore (for varying array assignment)
 	var data [16]int32
-	
+
 	go for i := range data {
 		// Load should generate vector load with varying indices
 		value := data[i]
-		
+
 		// Store should generate vector store with varying indices
 		data[i] = value * 2
 	}
@@ -135,6 +137,6 @@ func testVaryingMemoryOpsSSA() {
 }
 
 // Helper function
-func process(x varying int) {
+func process(x lanes.Varying[int]) {
 	_ = x
 }

@@ -813,7 +813,7 @@ func (p *parser) funcDeclOrNil() *FuncDecl {
 		}
 	}
 
-	if p.tok == _Name || (buildcfg.Experiment.SPMD && (p.tok == _Uniform || p.tok == _Varying)) {
+	if p.tok == _Name {
 		f.Name = p.name()
 		f.TParamList, f.Type = p.funcType(context)
 	} else {
@@ -1012,17 +1012,6 @@ func (p *parser) operand(keep_parens bool) Expr {
 	case _Literal:
 		return p.oliteral()
 
-	case _Uniform, _Varying:
-		if buildcfg.Experiment.SPMD {
-			// Try to parse as SPMD type first, fall back to identifier if it fails
-			if p.looksLikeSPMDType() {
-				return p.spmdType()
-			}
-		}
-		// In expression/operand context, treat as regular identifier
-		// SPMD types are only parsed in type contexts when not in fallback mode
-		return p.name()
-
 	case _Lparen:
 		pos := p.pos()
 		p.next()
@@ -1121,7 +1110,7 @@ loop:
 		case _Dot:
 			p.next()
 			switch p.tok {
-			case _Name, _Uniform, _Varying:
+			case _Name:
 				// pexpr '.' sym
 				t := new(SelectorExpr)
 				t.pos = pos
@@ -1152,62 +1141,6 @@ loop:
 			}
 
 		case _Lbrack:
-			// Special case for constrained varying type conversions like "varying[16] int(...)"
-			// If the current expression x is "varying" and we see '[', handle constraint parsing
-			if buildcfg.Experiment.SPMD {
-				if name, ok := x.(*Name); ok && name.Value == "varying" {
-					// Look ahead to determine if this is a type conversion
-					// We need to parse the constraint and see if it's followed by a type name and '('
-					p.next() // consume '['
-					
-					var constraint Expr
-					if p.tok == _Rbrack {
-						// varying[] - universal constraint (empty brackets)
-						p.next() // consume ']'
-						marker := new(Name)
-						marker.pos = p.pos()
-						marker.Value = "__universal_constraint__"
-						constraint = marker
-					} else {
-						// varying[n] - numeric constraint
-						constraint = p.expr()
-						p.want(_Rbrack)
-					}
-					
-					// Now check if we have a type name followed by '(' - indicating a type conversion
-					if p.tok == _Name {
-						// Look ahead to see if this is followed by '('
-						typeName := p.lit
-						typePos := p.pos()
-						p.next() // consume the type name
-						
-						if p.tok == _Lparen {
-							// This is a constrained varying type conversion: create SPMDType node
-							spmdType := new(SPMDType)
-							spmdType.pos = name.Pos()
-							spmdType.Qualifier = _Varying
-							spmdType.Constraint = constraint
-							spmdType.Elem = NewName(typePos, typeName)
-							
-							x = spmdType
-							// Continue with normal CallExpr parsing - the _Lparen case will be handled in next iteration
-							continue loop
-						} else {
-							// Not a type conversion - this is complex to backtrack properly
-							// For now, just fall through to normal index expression parsing
-							// TODO: This might need better error handling or backtracking
-							p.syntaxError("unexpected token after varying constraint; expected '(' for type conversion")
-							break loop
-						}
-					} else {
-						// Not a type conversion - this is complex to backtrack properly
-						// For now, just fall through to normal index expression parsing
-						p.syntaxError("expected type name after varying constraint")
-						break loop
-					}
-				}
-			}
-			
 			// Normal index/slice expression parsing
 			p.next()
 
@@ -1307,51 +1240,6 @@ loop:
 			n := p.complitexpr()
 			n.Type = x
 			x = n
-
-		case _Name:
-			// Special case for SPMD type conversions like "varying int(...)" or "uniform float32(...)"
-			// If the current expression x is a SPMD qualifier (uniform/varying) and the next token 
-			// is a type name followed by '(', create a proper SPMDType for the conversion
-			if buildcfg.Experiment.SPMD {
-				if name, ok := x.(*Name); ok && (name.Value == "uniform" || name.Value == "varying") {
-					// Look ahead to see if this is followed by '('
-					typeName := p.lit
-					typePos := p.pos()
-					p.next() // consume the type name
-					
-					if p.tok == _Lparen {
-						// This is a type conversion: create a proper SPMDType node
-						spmdType := new(SPMDType)
-						spmdType.pos = name.Pos()
-						
-						// Set the qualifier token
-						if name.Value == "uniform" {
-							spmdType.Qualifier = _Uniform
-						} else {
-							spmdType.Qualifier = _Varying
-						}
-						
-						// Set the element type
-						spmdType.Elem = NewName(typePos, typeName)
-						spmdType.Constraint = nil // No constraint for simple type conversions
-						
-						x = spmdType
-						// Continue with normal CallExpr parsing - the _Lparen case will be handled in next iteration
-						continue loop
-					} else {
-						// Not a type conversion - this is an error case like "varying int" without parentheses
-						// Create a SelectorExpr to represent this and let type checker handle the error
-						selector := new(SelectorExpr)
-						selector.pos = name.Pos()
-						selector.X = name
-						selector.Sel = NewName(typePos, typeName)
-						x = selector
-						continue loop
-					}
-				}
-			}
-			// If not a SPMD type conversion, fall through to default case
-			break loop
 
 		default:
 			break loop
@@ -1520,14 +1408,6 @@ func (p *parser) typeOrNil() Expr {
 
 	case _Interface:
 		return p.interfaceType()
-
-	case _Uniform, _Varying:
-		// SPMD qualified types (uniform/varying) when experiment is enabled
-		if buildcfg.Experiment.SPMD {
-			return p.spmdType()
-		}
-		// Fall through to _Name case when SPMD disabled
-		fallthrough
 
 	case _Name:
 		return p.qualifiedName(nil)
@@ -1698,130 +1578,17 @@ func (p *parser) interfaceType() *InterfaceType {
 }
 
 // isIdentifierToken reports whether the current token can be treated as an identifier.
-// This includes _Name tokens and _Uniform/_Varying when they should be downgraded to identifiers.
 func (p *parser) isIdentifierToken() bool {
-	return p.tok == _Name || (buildcfg.Experiment.SPMD && (p.tok == _Uniform || p.tok == _Varying))
+	return p.tok == _Name
 }
 
-// identifierName returns a name node for the current token, treating _Uniform/_Varying as identifiers when appropriate.
+// identifierName returns a name node for the current token.
 func (p *parser) identifierName() *Name {
 	if p.tok == _Name {
 		return p.name()
-	} else if buildcfg.Experiment.SPMD && (p.tok == _Uniform || p.tok == _Varying) {
-		// Downgrade _Uniform/_Varying to identifier
-		name := new(Name)
-		name.pos = p.pos()
-		name.Value = p.lit // "uniform" or "varying"
-		p.next()
-		return name
 	}
 	// Should not reach here if isIdentifierToken() was checked first
 	return nil
-}
-
-// spmdType parses SPMD qualified types: uniform Type, varying Type, varying[n] Type, varying[] Type
-// Only available when GOEXPERIMENT=spmd is enabled
-func (p *parser) spmdType() *SPMDType {
-	if trace {
-		defer p.trace("spmdType")()
-	}
-
-	typ := new(SPMDType)
-	typ.pos = p.pos()
-	typ.Qualifier = p.tok // _Uniform or _Varying
-	
-	p.next() // consume qualifier token
-
-	// Handle constraint for varying types: varying[n] or varying[]
-	if typ.Qualifier == _Varying && p.got(_Lbrack) {
-		if p.got(_Rbrack) {
-			// varying[] - universal constraint (empty brackets)
-			// Use a special marker to distinguish from no brackets
-			marker := new(Name)
-			marker.pos = p.pos()
-			marker.Value = "__universal_constraint__"
-			typ.Constraint = marker
-		} else {
-			// varying[n] - numeric constraint
-			typ.Constraint = p.expr() 
-			p.want(_Rbrack)
-		}
-	}
-
-	// Parse the underlying type
-	typ.Elem = p.type_()
-	
-	// Validate: constrained varying cannot have array element types
-	// varying[4] [32]int32 is illegal - should be [32]varying[4] int32 instead
-	if typ.Constraint != nil {
-		if arrayType, ok := typ.Elem.(*ArrayType); ok {
-			p.syntaxErrorAt(arrayType.Pos(), "constrained varying cannot have array element type; use '[n]varying[c] T' instead of 'varying[c] [n]T'")
-			// Return a placeholder type to avoid further errors
-			typ.Elem = p.badExpr()
-		}
-	}
-	
-	return typ
-}
-
-// looksLikeSPMDType performs simple lookahead to determine if the current token sequence
-// represents a valid SPMD type pattern without advancing the parser position.
-func (p *parser) looksLikeSPMDType() bool {
-	// Simple heuristic: check what comes after the uniform/varying token
-	// This uses the scanner's lookahead capability to peek at next tokens
-	
-	// Create a temporary scanner at the same position
-	tempScanner := p.scanner
-	
-	// Current token should be _Uniform or _Varying
-	if tempScanner.tok != _Uniform && tempScanner.tok != _Varying {
-		return false
-	}
-	
-	qualifier := tempScanner.tok
-	tempScanner.next() // consume qualifier
-	
-	// For varying, handle optional constraint: varying[n] or varying[]
-	if qualifier == _Varying && tempScanner.tok == _Lbrack {
-		tempScanner.next() // consume '['
-		
-		// Skip over constraint - simplified bracket matching
-		if tempScanner.tok == _Rbrack {
-			tempScanner.next() // consume ']' for empty constraint varying[]
-		} else {
-			// Skip constraint content until closing bracket
-			bracketDepth := 1
-			for bracketDepth > 0 && tempScanner.tok != _EOF {
-				if tempScanner.tok == _Lbrack {
-					bracketDepth++
-				} else if tempScanner.tok == _Rbrack {
-					bracketDepth--
-				}
-				tempScanner.next()
-			}
-			// After the loop, we should be positioned just after the closing ']'
-		}
-	}
-	
-	// Check if what follows can start a type
-	return isValidTypeStart(tempScanner.tok)
-}
-
-// isValidTypeStart checks if a token can start a type
-func isValidTypeStart(tok token) bool {
-	switch tok {
-	case _Name, _Star, _Arrow, _Func, _Lbrack, _Map, _Chan, _Interface, _Struct:
-		return true
-	case _Lparen:
-		// Could be parenthesized type, but in context of uniform() or varying(),
-		// this is more likely a function call. We should be conservative here.
-		// Only consider _Lparen as type start when it's NOT immediately after
-		// uniform/varying tokens to avoid false positives for function calls.
-		return false
-	default:
-		// Check for SPMD types
-		return tok == _Uniform || tok == _Varying
-	}
 }
 
 // Result = Parameters | Type .
@@ -1874,7 +1641,7 @@ func (p *parser) fieldDecl(styp *StructType) {
 
 	pos := p.pos()
 	switch p.tok {
-	case _Name, _Uniform, _Varying:
+	case _Name:
 		name := p.name()
 		if p.tok == _Dot || p.tok == _Literal || p.tok == _Semi || p.tok == _Rbrace {
 			// embedded type
@@ -3060,7 +2827,7 @@ func (p *parser) stmtOrNil() Stmt {
 
 	// Most statements (assignments) start with an identifier;
 	// look for it first before doing anything more expensive.
-	if p.tok == _Name || (buildcfg.Experiment.SPMD && (p.tok == _Uniform || p.tok == _Varying)) {
+	if p.tok == _Name {
 		p.clearPragma()
 		lhs := p.exprList()
 		if label, ok := lhs.(*Name); ok && p.tok == _Colon {
@@ -3245,13 +3012,6 @@ func (p *parser) name() *Name {
 		return n
 	}
 
-	// Allow _Uniform/_Varying as identifiers for backward compatibility
-	if buildcfg.Experiment.SPMD && (p.tok == _Uniform || p.tok == _Varying) {
-		n := NewName(p.pos(), p.lit)
-		p.next()
-		return n
-	}
-
 	n := NewName(p.pos(), "_")
 	p.syntaxError("expected name")
 	p.advance()
@@ -3362,6 +3122,16 @@ func (p *parser) typeList(strict bool) (x Expr, comma bool) {
 			}
 			l := new(ListExpr)
 			l.pos = x.Pos() // == list[0].Pos()
+			l.ElemList = list
+			x = l
+		} else if buildcfg.Experiment.SPMD && p.tok != _Rbrack {
+			// SPMD extension: allow constant expressions as second type argument
+			// for lanes.Varying[T, N] syntax where N is a numeric constant.
+			// The type checker validates this is only used with lanes.Varying.
+			t := p.expr()
+			list := []Expr{x, t}
+			l := new(ListExpr)
+			l.pos = x.Pos()
 			l.ElemList = list
 			x = l
 		}

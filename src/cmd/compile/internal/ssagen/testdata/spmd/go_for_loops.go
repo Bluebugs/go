@@ -3,6 +3,8 @@
 // Test SSA generation for go for loops
 package spmdtest
 
+import "lanes"
+
 // Test basic go for loop generates correct SSA opcodes
 func testBasicGoForSSA() {
 	// EXPECT SSA: OpPhi (for loop counter)
@@ -10,7 +12,7 @@ func testBasicGoForSSA() {
 	// EXPECT SSA: OpVectorAdd (for varying arithmetic)
 	// EXPECT SSA: OpVectorStore (for varying data storing)
 	go for i := range 16 {
-		var data varying int32 = varying int32(i) * 2
+		var data lanes.Varying[int32] = lanes.Varying[int32](i) * 2
 		process(int(data))
 	}
 }
@@ -22,9 +24,9 @@ func testGoForWithMaskingSSA() {
 	// EXPECT SSA: OpSelect (for conditional execution with mask)
 	// EXPECT SSA: OpOr (for mask combination)
 	go for i := range 16 {
-		var condition varying bool = i > 8
+		var condition lanes.Varying[bool] = i > 8
 		if condition {
-			var result varying int32 = varying int32(i) * 3
+			var result lanes.Varying[int32] = lanes.Varying[int32](i) * 3
 			process(int(result))
 		}
 	}
@@ -36,8 +38,8 @@ func testConstrainedGoForSSA() {
 	// EXPECT SSA: OpVectorLoad (for constrained varying data)
 	// EXPECT SSA: OpCall (to lanes.FromConstrained)
 	go for i := range[4] 16 {
-		var data varying[4] int32
-		process(int(data[0]))
+		var data lanes.Varying[int32, 4]
+		process(int(data))
 		_ = i
 	}
 }
@@ -49,11 +51,11 @@ func testNestedControlFlowSSA() {
 	// EXPECT SSA: OpSelect (for conditional varying operations)
 	// EXPECT SSA: OpNot (for negating conditions)
 	go for i := range 16 {
-		var outer varying bool = i < 8
+		var outer lanes.Varying[bool] = i < 8
 		if outer {
-			var inner varying bool = i%2 == 0
+			var inner lanes.Varying[bool] = i%2 == 0
 			if inner {
-				var result varying int32 = varying int32(i) + 10
+				var result lanes.Varying[int32] = lanes.Varying[int32](i) + 10
 				process(int(result))
 			}
 		}
@@ -69,7 +71,7 @@ func testGoForContinueSSA() {
 		if i%3 == 0 {
 			continue
 		}
-		var data varying int32 = varying int32(i) * 4
+		var data lanes.Varying[int32] = lanes.Varying[int32](i) * 4
 		process(int(data))
 	}
 }

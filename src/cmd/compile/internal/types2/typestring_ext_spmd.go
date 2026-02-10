@@ -21,22 +21,23 @@ func (w *typeWriter) handleSPMDTypeString(typ Type) bool {
 	if t, ok := typ.(*SPMDType); ok {
 		switch t.qualifier {
 		case UniformQualifier:
-			w.string("uniform ")
+			// Uniform types are now just regular types - print the element type directly
+			w.typ(t.elem)
 		case VaryingQualifier:
-			w.string("varying")
+			w.string("lanes.Varying[")
+			w.typ(t.elem)
 			if t.IsConstrained() {
-				w.byte('[')
+				w.string(", ")
 				if t.IsUniversalConstrained() {
-					// varying[] - universal constraint
+					// lanes.Varying[T, 0] - universal constraint
+					w.byte('0')
 				} else {
-					// varying[n] - numeric constraint
+					// lanes.Varying[T, N] - numeric constraint
 					w.string(strconv.FormatInt(t.constraint, 10))
 				}
-				w.byte(']')
 			}
-			w.byte(' ')
+			w.byte(']')
 		}
-		w.typ(t.elem)
 		return true
 	}
 	return false

@@ -297,8 +297,7 @@ func (check *Checker) updateExprType(x syntax.Expr, typ Type, final bool) {
 		*syntax.FuncType,
 		*syntax.InterfaceType,
 		*syntax.MapType,
-		*syntax.ChanType,
-		*syntax.SPMDType:
+		*syntax.ChanType:
 		// These expression are never untyped - nothing to do.
 		// The respective sub-expressions got their final types
 		// upon assignment or use.
@@ -1253,7 +1252,7 @@ func (check *Checker) exprInternal(T *target, x *operand, e syntax.Expr, hint Ty
 		goto Error
 
 	case *syntax.ArrayType, *syntax.SliceType, *syntax.StructType, *syntax.FuncType,
-		*syntax.InterfaceType, *syntax.MapType, *syntax.ChanType, *syntax.SPMDType:
+		*syntax.InterfaceType, *syntax.MapType, *syntax.ChanType:
 		x.mode_ = typexpr
 		x.typ_ = check.typ(e)
 		// Note: rawExpr (caller of exprInternal) will call check.recordTypeAndValue

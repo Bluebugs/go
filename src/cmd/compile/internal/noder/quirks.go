@@ -65,10 +65,6 @@ func typeExprEndPos(expr0 syntax.Expr) syntax.Pos {
 			targs := syntax.UnpackListExpr(expr.Index)
 			expr0 = targs[len(targs)-1]
 
-		case *syntax.SPMDType:
-			// For SPMD types (uniform/varying), get position from element type
-			expr0 = expr.Elem
-
 		default:
 			panic(fmt.Sprintf("%s: unexpected type expression %v", expr.Pos(), syntax.String(expr)))
 		}

@@ -3,30 +3,29 @@
 // Test parser differentiation between constrained and unconstrained varying
 package spmdtest
 
+import "lanes"
+
 func testParserDifferentiation() {
 	// These should be parsed differently:
-	
+
 	// Case 1: Array of unconstrained varying elements
-	// Expected: ArrayType{Elem: SPMDType{constraint=-1, elem=int64}}
-	var unconstrained [16]varying int64
-	
-	// Case 2: Constrained varying with scalar element type  
-	// Expected: constraint=4, elem=int64
-	var constrained varying[4] int64
-	
+	// Expected: ArrayType{Elem: lanes.Varying[int64]}
+	var unconstrained [16]lanes.Varying[int64]
+
+	// Case 2: Constrained varying with scalar element type
+	// Expected: lanes.Varying[int64, 4]
+	var constrained lanes.Varying[int64, 4]
+
 	// Case 3: Universal constrained varying
-	// Expected: constraint=0, elem=int64
-	var universal varying[] int64
+	// Expected: lanes.Varying[int64, 0]
+	var universal lanes.Varying[int64, 0]
 
-	// Case 4: Constrained varying with scalar element type  
-	// Expected: constraint=4, elem=int64
-	var constrainedArray [5]varying[4] int64
-
-	var bad varying[4] [32]int32 // ERROR "constrained varying cannot have array element type; use '[n]varying[c] T' instead of 'varying[c] [n]T'"
+	// Case 4: Array of constrained varying with scalar element type
+	// Expected: [5]lanes.Varying[int64, 4]
+	var constrainedArray [5]lanes.Varying[int64, 4]
 
 	_ = unconstrained
-	_ = constrained  
+	_ = constrained
 	_ = universal
 	_ = constrainedArray
-	_ = bad
 }

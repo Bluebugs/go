@@ -1,21 +1,23 @@
 //go:build goexperiment.spmd
 
-// Test parsing differences between constrained and unconstrained varying
+// Test parsing of lanes.Varying[T] and lanes.Varying[T, N] types
 package spmdtest
+
+import "lanes"
 
 func testParsingDifferences() {
 	// Case 1: Array of unconstrained varying elements
-	// Should be parsed as: ArrayType{Elem: SPMDType{constraint=-1, elem=int64}}
-	var case1 [16]varying int64
+	// Should be parsed as: ArrayType{Elem: lanes.Varying[int64]}
+	var case1 [16]lanes.Varying[int64]
 	_ = case1
-	
+
 	// Case 2: Constrained varying scalar
-	// Should be parsed as: varying[4] (constrained) applied to int64
-	var case2 varying[4] int64
+	// Should be parsed as: lanes.Varying[int64, 4]
+	var case2 lanes.Varying[int64, 4]
 	_ = case2
-	
-	// Case 3: Universal constrained varying scalar  
-	// Should be parsed as: varying[] (universal constraint) applied to int64
-	var case3 varying[] int64
+
+	// Case 3: Universal constrained varying scalar
+	// Should be parsed as: lanes.Varying[int64, 0]
+	var case3 lanes.Varying[int64, 0]
 	_ = case3
 }

@@ -14,7 +14,6 @@ package syntax
 
 import (
 	"fmt"
-	"internal/buildcfg"
 	"io"
 	"unicode"
 	"unicode/utf8"
@@ -385,23 +384,6 @@ func (s *scanner) ident() {
 		if tok := keywordMap[hash(lit)]; tok != 0 && tokStrFast(tok) == string(lit) {
 			s.nlsemi = contains(1<<_Break|1<<_Continue|1<<_Fallthrough|1<<_Return, tok)
 			s.tok = tok
-			return
-		}
-	}
-
-	// Check for SPMD keywords when experiment is enabled
-	if buildcfg.Experiment.SPMD {
-		str := string(lit)
-		switch str {
-		case "uniform":
-			s.nlsemi = true // uniform should trigger semicolon insertion when used as identifier
-			s.lit = str
-			s.tok = _Uniform
-			return
-		case "varying":
-			s.nlsemi = true // varying should trigger semicolon insertion when used as identifier
-			s.lit = str
-			s.tok = _Varying
 			return
 		}
 	}

@@ -311,13 +311,6 @@ type (
 		expr
 	}
 
-	// SPMD qualified types: uniform Type, varying Type, varying[n] Type, varying[] Type
-	SPMDType struct {
-		Qualifier token // _Uniform or _Varying
-		Constraint Expr // nil (no constraint), numeric literal, or empty ([]) for universal
-		Elem Expr       // underlying type
-		expr
-	}
 )
 
 type expr struct {

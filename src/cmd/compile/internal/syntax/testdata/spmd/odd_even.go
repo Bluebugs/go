@@ -17,17 +17,17 @@ func main() {
 }
 
 func oddEvenCount(data []int) (int, int) {
-  	var odd varying int
-  	var even varying int
+	var odd lanes.Varying[int]
+	var even lanes.Varying[int]
 
-  	go for _, value := range data {
+	go for _, value := range data {
 		// value is varying (each lane processes different elements)
-    	if value&1 == 1 { // Check if odd
-        	odd++
-    	} else {      // Else it's even
-        	even++
-    	}
-  	}
+		if value&1 == 1 { // Check if odd
+			odd++
+		} else { // Else it's even
+			even++
+		}
+	}
 
-  	return reduce.Add(odd), reduce.Add(even)
+	return reduce.Add(odd), reduce.Add(even)
 }

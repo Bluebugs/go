@@ -5,6 +5,7 @@
 package types2
 
 // SPMDQualifier represents the SPMD type qualifier (uniform or varying).
+// Kept for backward compatibility during migration - will be removed after Phase 4.
 type SPMDQualifier uint8
 
 const (
@@ -12,14 +13,18 @@ const (
 	VaryingQualifier
 )
 
-// SPMDType represents a uniform or varying qualified type.
+// SPMDType represents a varying qualified type (lanes.Varying[T] or lanes.Varying[T, N]).
+// Since uniform is now implicit (regular Go types are uniform), SPMDType always means varying.
+// The qualifier field is kept during migration but should always be VaryingQualifier for new code.
 type SPMDType struct {
-	qualifier  SPMDQualifier
-	constraint int64 // -1 for no constraint, 0 for universal ([]), >0 for numeric constraint
+	qualifier  SPMDQualifier // kept for bridge phase, always VaryingQualifier for new code
+	constraint int64         // -1 for no constraint, 0 for universal ([]), >0 for numeric constraint
 	elem       Type
 }
 
 // NewUniform returns a new uniform type for the given element type.
+// Deprecated: uniform is now implicit. Use the element type directly.
+// Kept during bridge phase for old keyword-based code path.
 func NewUniform(elem Type) *SPMDType {
 	return &SPMDType{qualifier: UniformQualifier, constraint: -1, elem: elem}
 }
@@ -68,6 +73,8 @@ func (s *SPMDType) String() string { return TypeString(s, nil) }
 // Type compatibility and conversion utilities for SPMD types
 
 // IsUniformType reports whether t is a uniform type.
+// Deprecated: With package-based types, uniform is implicit. This always returns false
+// for new code paths since UniformQualifier is only created by old keyword-based path.
 func IsUniformType(t Type) bool {
 	if s, ok := t.(*SPMDType); ok {
 		return s.IsUniform()
@@ -97,12 +104,11 @@ func UnderlyingType(t Type) Type {
 	return t
 }
 
-// CanAssign reports whether a value of type src can be assigned to a variable of type dst
+// CanAssignSPMD reports whether a value of type src can be assigned to a variable of type dst
 // according to SPMD assignment rules.
 // - varying can be assigned to varying of the same underlying type
-// - uniform can be assigned to uniform of the same underlying type
-// - uniform can be assigned to varying (broadcast)
-// - varying cannot be assigned to uniform
+// - regular types can be assigned to varying (broadcast)
+// - varying cannot be assigned to regular types (except via reduce operations)
 func CanAssignSPMD(dst, src Type) bool {
 	dstSPMD, dstIsSPMD := dst.(*SPMDType)
 	srcSPMD, srcIsSPMD := src.(*SPMDType)
