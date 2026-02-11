@@ -723,6 +723,73 @@ var genericOps = []opData{
 	{name: "IsNaNFloat64x2", argLength: 1},
 	{name: "IsNaNFloat64x4", argLength: 1},
 	{name: "IsNaNFloat64x8", argLength: 1},
+
+	// SPMD (Single Program Multiple Data) operations.
+	// These represent high-level SPMD constructs that will be lowered
+	// to target-specific SIMD instructions by the backend (e.g., TinyGo LLVM).
+	// Unlike the typed SIMD ops above (e.g., AddInt32x4), these are
+	// type-agnostic and operate on the SPMD varying type.
+
+	// Vector construction
+	{name: "SPMDSplat", argLength: 1},              // broadcast scalar to all lanes: scalar -> varying
+	{name: "SPMDLaneIndex", argLength: 0},           // generate lane indices [0, 1, 2, ..., L-1]
+	{name: "SPMDLaneCount", argLength: 0},           // compile-time lane count constant
+
+	// Vector arithmetic (varying x varying -> varying)
+	{name: "SPMDAdd", argLength: 2, commutative: true},
+	{name: "SPMDSub", argLength: 2},
+	{name: "SPMDMul", argLength: 2, commutative: true},
+	{name: "SPMDDiv", argLength: 2},
+	{name: "SPMDMod", argLength: 2},
+	{name: "SPMDNeg", argLength: 1},
+
+	// Vector bitwise (varying x varying -> varying)
+	{name: "SPMDAnd", argLength: 2, commutative: true},
+	{name: "SPMDOr", argLength: 2, commutative: true},
+	{name: "SPMDXor", argLength: 2, commutative: true},
+	{name: "SPMDNot", argLength: 1},
+	{name: "SPMDShl", argLength: 2},
+	{name: "SPMDShr", argLength: 2},
+
+	// Vector comparison (varying x varying -> varying bool)
+	{name: "SPMDEqual", argLength: 2, commutative: true},
+	{name: "SPMDNotEqual", argLength: 2, commutative: true},
+	{name: "SPMDLess", argLength: 2},
+	{name: "SPMDLessEqual", argLength: 2},
+	{name: "SPMDGreater", argLength: 2},
+	{name: "SPMDGreaterEqual", argLength: 2},
+
+	// Mask operations (for SPMD control flow)
+	{name: "SPMDSelect", argLength: 3},              // mask, true_val, false_val -> varying
+	{name: "SPMDMaskAnd", argLength: 2},             // mask AND mask
+	{name: "SPMDMaskOr", argLength: 2},              // mask OR mask
+	{name: "SPMDMaskAndNot", argLength: 2},          // mask AND NOT mask
+	{name: "SPMDMaskNot", argLength: 1},             // NOT mask
+	{name: "SPMDMaskAllTrue", argLength: 1},         // reduce mask: all lanes true?
+	{name: "SPMDMaskAnyTrue", argLength: 1},         // reduce mask: any lane true?
+	{name: "SPMDMaskAllFalse", argLength: 1},        // reduce mask: all lanes false?
+
+	// Memory operations
+	{name: "SPMDLoad", argLength: 2, typ: "Mem"},    // base_addr, memory -> varying value
+	{name: "SPMDStore", argLength: 3, typ: "Mem"},   // base_addr, varying value, memory -> memory
+	{name: "SPMDMaskedLoad", argLength: 3, typ: "Mem"},  // base_addr, mask, memory -> varying value
+	{name: "SPMDMaskedStore", argLength: 4, typ: "Mem"}, // base_addr, varying value, mask, memory -> memory
+
+	// Reduction operations (varying -> scalar)
+	{name: "SPMDReduceAdd", argLength: 1},           // horizontal sum of all lanes
+	{name: "SPMDReduceMul", argLength: 1},           // horizontal product of all lanes
+	{name: "SPMDReduceMin", argLength: 1},           // minimum across all lanes
+	{name: "SPMDReduceMax", argLength: 1},           // maximum across all lanes
+	{name: "SPMDReduceAnd", argLength: 1},           // bitwise AND across all lanes
+	{name: "SPMDReduceOr", argLength: 1},            // bitwise OR across all lanes
+	{name: "SPMDReduceXor", argLength: 1},           // bitwise XOR across all lanes
+
+	// Cross-lane operations
+	{name: "SPMDBroadcastLane", argLength: 2},       // value, lane_idx -> broadcast one lane to all
+	{name: "SPMDRotate", argLength: 2},              // value, offset -> rotate lanes
+	{name: "SPMDSwizzle", argLength: 2},             // value, indices -> arbitrary permutation
+	{name: "SPMDShiftLeft", argLength: 2},           // value, count -> shift lanes left (fill with zero)
+	{name: "SPMDShiftRight", argLength: 2},          // value, count -> shift lanes right (fill with zero)
 }
 
 //     kind          controls          successors   implicit exit

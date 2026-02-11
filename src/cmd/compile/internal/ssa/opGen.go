@@ -6157,6 +6157,51 @@ const (
 	OpIsNaNFloat64x2
 	OpIsNaNFloat64x4
 	OpIsNaNFloat64x8
+	OpSPMDSplat
+	OpSPMDLaneIndex
+	OpSPMDLaneCount
+	OpSPMDAdd
+	OpSPMDSub
+	OpSPMDMul
+	OpSPMDDiv
+	OpSPMDMod
+	OpSPMDNeg
+	OpSPMDAnd
+	OpSPMDOr
+	OpSPMDXor
+	OpSPMDNot
+	OpSPMDShl
+	OpSPMDShr
+	OpSPMDEqual
+	OpSPMDNotEqual
+	OpSPMDLess
+	OpSPMDLessEqual
+	OpSPMDGreater
+	OpSPMDGreaterEqual
+	OpSPMDSelect
+	OpSPMDMaskAnd
+	OpSPMDMaskOr
+	OpSPMDMaskAndNot
+	OpSPMDMaskNot
+	OpSPMDMaskAllTrue
+	OpSPMDMaskAnyTrue
+	OpSPMDMaskAllFalse
+	OpSPMDLoad
+	OpSPMDStore
+	OpSPMDMaskedLoad
+	OpSPMDMaskedStore
+	OpSPMDReduceAdd
+	OpSPMDReduceMul
+	OpSPMDReduceMin
+	OpSPMDReduceMax
+	OpSPMDReduceAnd
+	OpSPMDReduceOr
+	OpSPMDReduceXor
+	OpSPMDBroadcastLane
+	OpSPMDRotate
+	OpSPMDSwizzle
+	OpSPMDShiftLeft
+	OpSPMDShiftRight
 	OpAESDecryptLastRoundUint8x16
 	OpAESDecryptLastRoundUint8x32
 	OpAESDecryptLastRoundUint8x64
@@ -88861,6 +88906,238 @@ var opcodeTable = [...]opInfo{
 	{
 		name:    "IsNaNFloat64x8",
 		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDSplat",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDLaneIndex",
+		argLen:  0,
+		generic: true,
+	},
+	{
+		name:    "SPMDLaneCount",
+		argLen:  0,
+		generic: true,
+	},
+	{
+		name:        "SPMDAdd",
+		argLen:      2,
+		commutative: true,
+		generic:     true,
+	},
+	{
+		name:    "SPMDSub",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:        "SPMDMul",
+		argLen:      2,
+		commutative: true,
+		generic:     true,
+	},
+	{
+		name:    "SPMDDiv",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDMod",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDNeg",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:        "SPMDAnd",
+		argLen:      2,
+		commutative: true,
+		generic:     true,
+	},
+	{
+		name:        "SPMDOr",
+		argLen:      2,
+		commutative: true,
+		generic:     true,
+	},
+	{
+		name:        "SPMDXor",
+		argLen:      2,
+		commutative: true,
+		generic:     true,
+	},
+	{
+		name:    "SPMDNot",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDShl",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDShr",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:        "SPMDEqual",
+		argLen:      2,
+		commutative: true,
+		generic:     true,
+	},
+	{
+		name:        "SPMDNotEqual",
+		argLen:      2,
+		commutative: true,
+		generic:     true,
+	},
+	{
+		name:    "SPMDLess",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDLessEqual",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDGreater",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDGreaterEqual",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDSelect",
+		argLen:  3,
+		generic: true,
+	},
+	{
+		name:    "SPMDMaskAnd",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDMaskOr",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDMaskAndNot",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDMaskNot",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDMaskAllTrue",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDMaskAnyTrue",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDMaskAllFalse",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDLoad",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDStore",
+		argLen:  3,
+		generic: true,
+	},
+	{
+		name:    "SPMDMaskedLoad",
+		argLen:  3,
+		generic: true,
+	},
+	{
+		name:    "SPMDMaskedStore",
+		argLen:  4,
+		generic: true,
+	},
+	{
+		name:    "SPMDReduceAdd",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDReduceMul",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDReduceMin",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDReduceMax",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDReduceAnd",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDReduceOr",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDReduceXor",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDBroadcastLane",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDRotate",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDSwizzle",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDShiftLeft",
+		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDShiftRight",
+		argLen:  2,
 		generic: true,
 	},
 	{
