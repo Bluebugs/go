@@ -1037,6 +1037,10 @@ type state struct {
 	breakTo    *ssa.Block // current target for plain break statement
 	continueTo *ssa.Block // current target for plain continue statement
 
+	// SPMD mask tracking
+	inSPMDLoop bool       // true when generating code inside go for body
+	spmdMask   *ssa.Value // current lane execution mask (nil = all-true / not in SPMD)
+
 	// current location where we're interpreting the AST
 	curBlock *ssa.Block
 
@@ -1945,6 +1949,10 @@ func (s *state) stmt(n ir.Node) {
 
 	case ir.OIF:
 		n := n.(*ir.IfStmt)
+		if s.inSPMDLoop && n.IsVaryingCond {
+			s.spmdIfStmt(n)
+			break
+		}
 		if ir.IsConst(n.Cond, constant.Bool) {
 			s.stmtList(n.Cond.Init())
 			if ir.BoolVal(n.Cond) {

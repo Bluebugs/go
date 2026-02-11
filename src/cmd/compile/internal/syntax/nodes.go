@@ -408,6 +408,7 @@ type (
 		Cond Expr
 		Then *BlockStmt
 		Else Stmt // either nil, *IfStmt, or *BlockStmt
+		IsVaryingCond bool // true if Cond is a varying type (set by type checker)
 		stmt
 	}
 

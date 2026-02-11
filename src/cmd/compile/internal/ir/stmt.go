@@ -265,10 +265,11 @@ func NewGoDeferStmt(pos src.XPos, op Op, call Node) *GoDeferStmt {
 // An IfStmt is a return statement: if Init; Cond { Body } else { Else }.
 type IfStmt struct {
 	miniStmt
-	Cond   Node
-	Body   Nodes
-	Else   Nodes
-	Likely bool // code layout hint
+	Cond          Node
+	Body          Nodes
+	Else          Nodes
+	Likely        bool // code layout hint
+	IsVaryingCond bool // true if Cond has varying type (SPMD)
 }
 
 func NewIfStmt(pos src.XPos, cond Node, body, els []Node) *IfStmt {

@@ -1604,6 +1604,7 @@ func (w *writer) ifStmt(stmt *syntax.IfStmt) {
 		w.stmt(stmt.Else)
 	}
 	w.closeAnotherScope()
+	w.Bool(stmt.IsVaryingCond) // SPMD: varying condition flag
 }
 
 func (w *writer) selectStmt(stmt *syntax.SelectStmt) {

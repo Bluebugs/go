@@ -7,6 +7,7 @@ package ssagen
 import (
 	"cmd/compile/internal/ir"
 	"cmd/compile/internal/ssa"
+	"cmd/compile/internal/types"
 	"cmd/internal/src"
 )
 
@@ -31,6 +32,18 @@ func (s *state) spmdForStmt(n *ir.ForStmt) {
 		s.scalarForStmt(n)
 		return
 	}
+
+	// Save and set SPMD context
+	prevInSPMD := s.inSPMDLoop
+	prevMask := s.spmdMask
+	s.inSPMDLoop = true
+	// Initialize all-true mask: SPMDSplat(true)
+	boolType := types.Types[types.TBOOL]
+	s.spmdMask = s.newValue1(ssa.OpSPMDSplat, boolType, s.constBool(true))
+	defer func() {
+		s.inSPMDLoop = prevInSPMD
+		s.spmdMask = prevMask
+	}()
 
 	bCond := s.f.NewBlock(ssa.BlockPlain)
 	bBody := s.f.NewBlock(ssa.BlockPlain)
@@ -159,4 +172,106 @@ func (s *state) scalarForStmt(n *ir.ForStmt) {
 	}
 
 	s.startBlock(bEnd)
+}
+
+// spmdIfStmt generates SSA for a varying-condition if/else inside an SPMD loop.
+// Instead of branching, both branches execute with different lane masks,
+// and modified variables are merged using SPMDSelect.
+func (s *state) spmdIfStmt(n *ir.IfStmt) {
+	// Evaluate the varying condition (including any init statements)
+	s.stmtList(n.Cond.Init())
+	condValue := s.expr(n.Cond)
+	boolType := types.Types[types.TBOOL]
+
+	savedMask := s.spmdMask
+
+	// Compute branch masks
+	trueMask := s.newValue2(ssa.OpSPMDMaskAnd, boolType, savedMask, condValue)
+	falseMask := s.newValue2(ssa.OpSPMDMaskAndNot, boolType, savedMask, condValue)
+
+	// Snapshot vars before branches
+	snapshot := s.snapshotVars()
+
+	// Execute true branch with trueMask
+	s.spmdMask = trueMask
+	s.stmtList(n.Body)
+	trueVars := s.snapshotVars()
+
+	// Restore to pre-branch state, execute false branch with falseMask
+	s.restoreVarsSnapshot(snapshot)
+	s.spmdMask = falseMask
+	if len(n.Else) > 0 {
+		s.stmtList(n.Else)
+	}
+	// s.vars now holds false-branch state
+
+	// Merge modified variables using SPMDSelect
+	s.spmdMergeVars(condValue, snapshot, trueVars)
+
+	// Restore mask
+	s.spmdMask = savedMask
+}
+
+// snapshotVars returns a shallow copy of the current variable map.
+func (s *state) snapshotVars() map[ir.Node]*ssa.Value {
+	snap := make(map[ir.Node]*ssa.Value, len(s.vars))
+	for k, v := range s.vars {
+		snap[k] = v
+	}
+	return snap
+}
+
+// restoreVarsSnapshot restores s.vars from a snapshot.
+func (s *state) restoreVarsSnapshot(snap map[ir.Node]*ssa.Value) {
+	s.vars = make(map[ir.Node]*ssa.Value, len(snap))
+	for k, v := range snap {
+		s.vars[k] = v
+	}
+}
+
+// spmdMergeVars merges variables after both branches of a varying if.
+// condValue is the varying bool condition.
+// snapshot is the pre-branch variable state.
+// trueVars is the variable state after the true branch.
+// s.vars currently holds the false-branch state.
+//
+// For each variable modified in either branch:
+//   merged = SPMDSelect(cond, trueVal, falseVal)
+func (s *state) spmdMergeVars(condValue *ssa.Value, snapshot, trueVars map[ir.Node]*ssa.Value) {
+	// Collect all variables that were modified in either branch
+	for varNode, trueVal := range trueVars {
+		origVal := snapshot[varNode]
+		falseVal := s.vars[varNode]
+		if falseVal == nil {
+			falseVal = origVal
+		}
+		if origVal == nil && falseVal == nil {
+			// New variable only exists in true branch; not visible after merge
+			continue
+		}
+		if trueVal == origVal && falseVal == origVal {
+			continue // not modified in either branch
+		}
+		if trueVal == falseVal {
+			s.vars[varNode] = trueVal // same value, no select needed
+			continue
+		}
+		// Different values: merge with SPMDSelect(cond, trueVal, falseVal)
+		s.vars[varNode] = s.newValue3(ssa.OpSPMDSelect, trueVal.Type, condValue, trueVal, falseVal)
+	}
+	// Also check false-only modifications (vars modified in false branch but not in true)
+	for varNode, falseVal := range s.vars {
+		if _, inTrue := trueVars[varNode]; inTrue {
+			continue // already handled above
+		}
+		origVal := snapshot[varNode]
+		if falseVal == origVal {
+			continue // not modified
+		}
+		trueVal := origVal
+		if trueVal == nil {
+			continue // new variable only in false branch, keep it
+		}
+		s.vars[varNode] = s.newValue3(ssa.OpSPMDSelect, falseVal.Type, condValue, trueVal, falseVal)
+	}
 }

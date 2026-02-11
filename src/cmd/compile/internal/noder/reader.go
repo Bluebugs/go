@@ -1926,6 +1926,7 @@ func (r *reader) ifStmt() ir.Node {
 		els = r.stmts()
 	}
 	r.closeAnotherScope()
+	isVaryingCond := r.Bool() // SPMD: must read even if staticCond != 0 to maintain serialization sync
 
 	if staticCond != 0 {
 		// We may have removed a dead return statement, which can trip up
@@ -1942,6 +1943,7 @@ func (r *reader) ifStmt() ir.Node {
 
 	n := ir.NewIfStmt(pos, cond, then, els)
 	n.SetInit(init)
+	n.IsVaryingCond = isVaryingCond
 	return n
 }
 

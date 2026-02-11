@@ -307,6 +307,7 @@ func (check *Checker) spmdIfStmt(s *syntax.IfStmt, ctxt stmtContext) {
 
 	// Track varying depth
 	if isVaryingCondition {
+		s.IsVaryingCond = true // mark for noder/SSA
 		globalSPMDInfo.varyingDepth++
 		defer func() { globalSPMDInfo.varyingDepth-- }()
 	}
