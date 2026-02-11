@@ -223,6 +223,8 @@ type ForStmt struct {
 	Post         Node
 	Body         Nodes
 	DistinctVars bool
+	IsSpmd       bool  // true for "go for" SPMD loops
+	LaneCount    int64 // effective SIMD lane count (from type checker)
 }
 
 func NewForStmt(pos src.XPos, init Node, cond, post Node, body []Node, distinctVars bool) *ForStmt {
@@ -394,6 +396,8 @@ type RangeStmt struct {
 	Body         Nodes
 	DistinctVars bool
 	Prealloc     *Name
+	IsSpmd       bool  // true for "go for" SPMD loops
+	LaneCount    int64 // effective SIMD lane count (from type checker)
 
 	// When desugaring the RangeStmt during walk, the assignments to Key
 	// and Value may require OCONVIFACE operations. If so, these fields

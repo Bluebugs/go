@@ -1560,6 +1560,10 @@ func (w *writer) forStmt(stmt *syntax.ForStmt) {
 
 	w.blockStmt(stmt.Body)
 	w.Bool(w.distinctVars(stmt))
+	w.Bool(stmt.IsSpmd)
+	if stmt.IsSpmd {
+		w.Uint64(uint64(stmt.LaneCount))
+	}
 	w.closeAnotherScope()
 }
 

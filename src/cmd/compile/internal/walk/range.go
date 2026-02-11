@@ -47,6 +47,8 @@ func walkRange(nrange *ir.RangeStmt) ir.Node {
 	nfor := ir.NewForStmt(nrange.Pos(), nil, nil, nil, nil, nrange.DistinctVars)
 	nfor.SetInit(nrange.Init())
 	nfor.Label = nrange.Label
+	nfor.IsSpmd = nrange.IsSpmd
+	nfor.LaneCount = nrange.LaneCount
 
 	// variable name conventions:
 	//	ohv1, hv1, hv2: hidden (old) val 1, 2

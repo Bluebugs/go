@@ -1876,6 +1876,10 @@ func (r *reader) forStmt(label *types.Sym) ir.Node {
 
 		rang.Body = r.blockStmt()
 		rang.DistinctVars = r.Bool()
+		rang.IsSpmd = r.Bool()
+		if rang.IsSpmd {
+			rang.LaneCount = int64(r.Uint64())
+		}
 		r.closeAnotherScope()
 
 		return rang
@@ -1887,6 +1891,11 @@ func (r *reader) forStmt(label *types.Sym) ir.Node {
 	post := r.stmt()
 	body := r.blockStmt()
 	perLoopVars := r.Bool()
+	isSpmd := r.Bool()
+	var laneCount int64
+	if isSpmd {
+		laneCount = int64(r.Uint64())
+	}
 	r.closeAnotherScope()
 
 	if ir.IsConst(cond, constant.Bool) && !ir.BoolVal(cond) {
@@ -1895,6 +1904,8 @@ func (r *reader) forStmt(label *types.Sym) ir.Node {
 
 	stmt := ir.NewForStmt(pos, init, cond, post, body, perLoopVars)
 	stmt.Label = label
+	stmt.IsSpmd = isSpmd
+	stmt.LaneCount = laneCount
 	return stmt
 }
 
