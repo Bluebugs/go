@@ -1769,6 +1769,13 @@ func (w *writer) switchStmt(stmt *syntax.SwitchStmt) {
 				if tagTypeIsChan {
 					typ = nil
 				}
+				// For varying switches with varying case values, use tagType
+				// so the implicit conversion is identity (no type mismatch).
+				if stmt.IsVaryingSwitch && typ != nil {
+					if _, ok := w.p.typeOf(cas).(*types2.SPMDType); ok {
+						typ = tagType
+					}
+				}
 				w.implicitConvExpr(typ, cas)
 			}
 		}

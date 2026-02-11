@@ -368,9 +368,17 @@ func (s *state) spmdSwitchStmt(n *ir.SwitchStmt) {
 		var caseCond *ssa.Value
 		for _, caseExpr := range clause.List {
 			caseVal := s.expr(caseExpr)
-			// Splat the (uniform) case value to all lanes
-			splatVal := s.newValue1(ssa.OpSPMDSplat, tagVal.Type, caseVal)
-			eq := s.newValue2(ssa.OpSPMDEqual, boolType, tagVal, splatVal)
+			// Determine if the case value is varying (produced by SPMD ops)
+			// or scalar (needs splatting to all lanes).
+			var eq *ssa.Value
+			if isVaryingSPMDValue(caseVal) {
+				// Varying case value: compare per-lane directly
+				eq = s.newValue2(ssa.OpSPMDEqual, boolType, tagVal, caseVal)
+			} else {
+				// Scalar case value: splat to all lanes then compare
+				splatVal := s.newValue1(ssa.OpSPMDSplat, tagVal.Type, caseVal)
+				eq = s.newValue2(ssa.OpSPMDEqual, boolType, tagVal, splatVal)
+			}
 			if caseCond == nil {
 				caseCond = eq
 			} else {
@@ -421,4 +429,27 @@ func (s *state) spmdSwitchStmt(n *ir.SwitchStmt) {
 
 	s.vars = accumulated
 	s.spmdMask = savedMask
+}
+
+// isVaryingSPMDValue reports whether v represents a varying (per-lane) value
+// by checking if it was produced by an SPMD operation.
+func isVaryingSPMDValue(v *ssa.Value) bool {
+	switch v.Op {
+	case ssa.OpSPMDSplat, ssa.OpSPMDLaneIndex, ssa.OpSPMDLaneCount,
+		ssa.OpSPMDAdd, ssa.OpSPMDSub, ssa.OpSPMDMul, ssa.OpSPMDDiv, ssa.OpSPMDMod,
+		ssa.OpSPMDNeg, ssa.OpSPMDAnd, ssa.OpSPMDOr, ssa.OpSPMDXor, ssa.OpSPMDNot,
+		ssa.OpSPMDShl, ssa.OpSPMDShr,
+		ssa.OpSPMDEqual, ssa.OpSPMDNotEqual,
+		ssa.OpSPMDLess, ssa.OpSPMDLessEqual, ssa.OpSPMDGreater, ssa.OpSPMDGreaterEqual,
+		ssa.OpSPMDSelect,
+		ssa.OpSPMDMaskAnd, ssa.OpSPMDMaskOr, ssa.OpSPMDMaskAndNot, ssa.OpSPMDMaskNot,
+		ssa.OpSPMDMaskAllTrue, ssa.OpSPMDMaskAnyTrue, ssa.OpSPMDMaskAllFalse,
+		ssa.OpSPMDLoad, ssa.OpSPMDStore, ssa.OpSPMDMaskedLoad, ssa.OpSPMDMaskedStore,
+		ssa.OpSPMDReduceAdd, ssa.OpSPMDReduceMul, ssa.OpSPMDReduceMin, ssa.OpSPMDReduceMax,
+		ssa.OpSPMDReduceAnd, ssa.OpSPMDReduceOr, ssa.OpSPMDReduceXor,
+		ssa.OpSPMDBroadcastLane, ssa.OpSPMDRotate, ssa.OpSPMDSwizzle,
+		ssa.OpSPMDShiftLeft, ssa.OpSPMDShiftRight:
+		return true
+	}
+	return false
 }

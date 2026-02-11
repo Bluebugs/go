@@ -485,21 +485,6 @@ func (check *Checker) spmdSwitchStmt(s *syntax.SwitchStmt, ctxt stmtContext) {
 		globalSPMDInfo.varyingDepth = originalVaryingDepth
 	}()
 
-	// For varying switches, case values are uniform (scalar) constants compared
-	// per-lane. Use the element type operand for caseValues so untyped constants
-	// resolve to the scalar type (e.g., int) rather than lanes.Varying[int].
-	caseX := &x
-	if isVaryingSwitch {
-		if spmdT, ok := x.typ().(*SPMDType); ok {
-			var elemOp operand
-			elemOp.mode_ = x.mode_
-			elemOp.typ_ = spmdT.Elem()
-			elemOp.expr = x.expr
-			elemOp.val = x.val
-			caseX = &elemOp
-		}
-	}
-
 	seen := make(valueMap) // map of seen case values to positions and types
 	for i, clause := range s.Body {
 		if clause == nil {
@@ -512,10 +497,78 @@ func (check *Checker) spmdSwitchStmt(s *syntax.SwitchStmt, ctxt stmtContext) {
 		} else {
 			inner |= finalSwitchCase
 		}
-		check.caseValues(caseX, syntax.UnpackListExpr(clause.Cases), seen)
+		if isVaryingSwitch {
+			check.spmdCaseValues(&x, syntax.UnpackListExpr(clause.Cases), seen)
+		} else {
+			check.caseValues(&x, syntax.UnpackListExpr(clause.Cases), seen)
+		}
 		check.openScope(clause, "case")
 		check.stmtList(inner, clause.Body)
 		check.closeScope()
+	}
+}
+
+// spmdCaseValues validates case values for a varying switch statement.
+// Handles both scalar (auto-splatted) and varying case values.
+func (check *Checker) spmdCaseValues(x *operand, values []syntax.Expr, seen valueMap) {
+	spmdT, ok := x.typ().(*SPMDType)
+	if !ok {
+		check.caseValues(x, values, seen)
+		return
+	}
+	elemType := spmdT.Elem()
+
+	// Create element-type operand for scalar case comparisons
+	var elemOp operand
+	elemOp.mode_ = x.mode_
+	elemOp.typ_ = elemType
+	elemOp.expr = x.expr
+	elemOp.val = x.val
+
+L:
+	for _, e := range values {
+		var v operand
+		check.expr(nil, &v, e)
+		if !x.isValid() || !v.isValid() {
+			continue L
+		}
+
+		if _, isVarying := v.typ().(*SPMDType); isVarying {
+			// Varying case value: compare against full SPMD type
+			res := v
+			check.comparison(&res, x, syntax.Eql, true)
+			if !res.isValid() {
+				continue L
+			}
+		} else {
+			// Scalar case value: convert untyped to element type, compare
+			check.convertUntyped(&v, elemType)
+			if !v.isValid() {
+				continue L
+			}
+			res := v
+			check.comparison(&res, &elemOp, syntax.Eql, true)
+			if !res.isValid() {
+				continue L
+			}
+		}
+
+		if v.mode() != constant_ {
+			continue L // non-constant, done
+		}
+		// Look for duplicate constant values
+		if val := goVal(v.val); val != nil {
+			for _, vt := range seen[val] {
+				if Identical(v.typ(), vt.typ) {
+					err := check.newError(DuplicateCase)
+					err.addf(&v, "duplicate case %s in expression switch", &v)
+					err.addf(vt.pos, "previous case")
+					err.report()
+					continue L
+				}
+			}
+			seen[val] = append(seen[val], valueType{v.Pos(), v.typ()})
+		}
 	}
 }
 
