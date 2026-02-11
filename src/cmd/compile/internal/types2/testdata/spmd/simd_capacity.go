@@ -23,8 +23,8 @@ func testGoForCapacityConstraints() {
 	}
 
 	go for i := range 32 {
-		var a lanes.Varying[int64]      // 8 bytes * 4 lanes = 32 bytes (over SIMD128)
-		var b lanes.Varying[int64]      // 8 bytes * 4 lanes = 32 bytes (total 64 bytes)
+		var a lanes.Varying[int64]      // 8 bytes * 2 lanes = 16 bytes
+		var b lanes.Varying[int64]      // 8 bytes * 2 lanes = 16 bytes
 		processAny(a + b)
 		_ = i
 	}
@@ -119,6 +119,19 @@ func testLanesCountCapacity() {
 		if laneCount > 0 {
 			processAny(data)
 		}
+		_ = i
+	}
+}
+
+// Test lane count consistency across mixed element types
+func testLaneCountConsistency() {
+	// Mixed element sizes: compiler picks minimum lane count (2)
+	go for i := range 16 {
+		var a lanes.Varying[byte]    // 16 lanes naturally
+		var b lanes.Varying[int64]   // 2 lanes naturally
+		// Effective lane count: 2 (determined by largest element)
+		_ = a
+		_ = b
 		_ = i
 	}
 }

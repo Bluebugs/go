@@ -23,10 +23,12 @@ const (
 
 // SPMDControlFlowInfo tracks SPMD control flow context following ISPC approach
 type SPMDControlFlowInfo struct {
-	inSPMDLoop        bool // inside SPMD go for loop
-	varyingDepth      int  // depth of nested varying if statements
-	maskAltered       bool // true if any continue in varying context has occurred
-	hasVaryingParams  bool // current function has varying parameters
+	inSPMDLoop         bool    // inside SPMD go for loop
+	varyingDepth       int     // depth of nested varying if statements
+	maskAltered        bool    // true if any continue in varying context has occurred
+	hasVaryingParams   bool    // current function has varying parameters
+	varyingElemSizes   []int64 // elem sizes of unconstrained varying types in loop
+	effectiveLaneCount int64   // computed after loop body type-check
 }
 
 // handleSPMDStatement processes SPMD-specific statement validation
@@ -128,6 +130,7 @@ func (check *Checker) spmdForStmt(s *syntax.ForStmt, ctxt stmtContext) {
 		varyingDepth:     0,
 		maskAltered:      false,
 		hasVaryingParams: oldSPMDInfo.hasVaryingParams, // Preserve from outer scope
+		varyingElemSizes: nil,
 	}
 	defer func() { globalSPMDInfo = oldSPMDInfo }()
 
@@ -183,6 +186,9 @@ func (check *Checker) spmdForStmt(s *syntax.ForStmt, ctxt stmtContext) {
 		check.openScope(blockStmt, "block")
 		defer check.closeScope()
 		check.stmtList(inner, blockStmt.List)
+
+		// Compute and record effective lane count
+		s.LaneCount = check.computeEffectiveLaneCount(&globalSPMDInfo)
 	}
 }
 
@@ -278,6 +284,12 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 	check.openScope(blockStmt, "block")
 	defer check.closeScope()
 	check.stmtList(inner, blockStmt.List)
+
+	// Track the implicit varying loop variable for lane count computation
+	globalSPMDInfo.varyingElemSizes = append(globalSPMDInfo.varyingElemSizes, check.getTypeSize(Typ[Int]))
+
+	// Compute and record effective lane count
+	forStmt.LaneCount = check.computeEffectiveLaneCount(&globalSPMDInfo)
 }
 
 // spmdIfStmt handles if statements within SPMD context

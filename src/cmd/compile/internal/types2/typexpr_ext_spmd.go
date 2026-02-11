@@ -142,6 +142,12 @@ func (check *Checker) processLanesVaryingType(indexExpr *syntax.IndexExpr, def *
 	// Create the SPMD type (always varying - uniform is implicit via regular Go types)
 	typ := NewVaryingConstrained(elem, constraint)
 
+	// Track unconstrained varying element sizes for lane count computation
+	if globalSPMDInfo.inSPMDLoop && !typ.IsConstrained() {
+		elemSize := check.getTypeSize(typ.elem)
+		globalSPMDInfo.varyingElemSizes = append(globalSPMDInfo.varyingElemSizes, elemSize)
+	}
+
 	// Set the type on def if provided (for type declarations)
 	if def != nil {
 		if named := asNamed(def.typ); named != nil {

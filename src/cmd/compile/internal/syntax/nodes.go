@@ -416,7 +416,8 @@ type (
 		Cond Expr
 		Post SimpleStmt
 		Body *BlockStmt
-		IsSpmd bool // true for "go for" loops
+		IsSpmd    bool  // true for "go for" loops
+		LaneCount int64 // effective SIMD lane count (set by type checker)
 		stmt
 	}
 

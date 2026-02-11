@@ -99,51 +99,20 @@ const (
 
 	// Constrained varying capacity limit: 512 bits = 64 bytes
 	constrainedVaryingCapacityBytes = 64
-
-	// Default lane count for capacity calculations
-	defaultLaneCount = 4
-
-	// For PoC, be more permissive with capacity - allow larger types for testing
-	// In practice, this would be configurable per target architecture
-	pocCapacityMultiplier = 4 // Allow 4x SIMD128 capacity for PoC testing
 )
 
-// checkSPMDFunctionCapacity validates that varying parameters don't exceed SIMD capacity
-func (check *Checker) checkSPMDFunctionCapacity(fdecl *syntax.FuncDecl, sig *Signature) {
-	if !buildcfg.Experiment.SPMD {
-		return
+// laneCountForType returns the SIMD128 lane count for a given element type.
+// Formula: 16 bytes (128 bits) / sizeof(T) = simd128CapacityBytes / elemSize
+func (check *Checker) laneCountForType(elem Type) int64 {
+	elemSize := check.getTypeSize(elem)
+	if elemSize <= 0 {
+		return 4 // conservative fallback
 	}
-
-	if sig.params != nil {
-		for _, param := range sig.params.vars {
-			if spmdType, ok := param.typ.(*SPMDType); ok && spmdType.IsVarying() {
-				size := check.calculateVaryingTypeCapacity(spmdType)
-
-				// Check individual parameter capacity - each parameter must be ≤ 16 bytes
-				maxCapacity := int64(simd128CapacityBytes) // 16 bytes per parameter
-				if size > maxCapacity {
-					check.error(fdecl, InvalidSPMDFunction, "SPMD function parameter capacity exceeded")
-					return
-				}
-			}
-		}
+	lc := int64(simd128CapacityBytes) / elemSize
+	if lc <= 0 {
+		return 1
 	}
-
-	// Note: No total function capacity limit - only per-parameter limit applies
-}
-
-// checkGoForCapacity validates SIMD capacity for go for loops
-func (check *Checker) checkGoForCapacity(stmt *syntax.ForStmt) {
-	if !buildcfg.Experiment.SPMD {
-		return
-	}
-
-	// Collect all varying variables declared/used in the loop body
-	capacity := check.calculateGoForCapacity(stmt.Body)
-
-	if capacity > simd128CapacityBytes {
-		check.error(stmt, InvalidSPMDFor, "SIMD register capacity exceeded")
-	}
+	return lc
 }
 
 // calculateVaryingTypeCapacity calculates the SIMD capacity needed for a varying type
@@ -154,14 +123,56 @@ func (check *Checker) calculateVaryingTypeCapacity(spmdType *SPMDType) int64 {
 	if spmdType.IsConstrained() {
 		constraintValue := spmdType.Constraint()
 		if constraintValue == 0 {
-			// Universal constraint ([]) - use default lane count
-			return elementSize * defaultLaneCount
+			// Universal constraint ([]) - use laneCountForType
+			return elementSize * check.laneCountForType(spmdType.elem)
 		}
 		return elementSize * constraintValue
 	}
 
-	// For unconstrained varying, multiply by default lane count
-	return elementSize * defaultLaneCount
+	// For unconstrained varying, capacity is always simd128CapacityBytes (16 bytes)
+	return elementSize * check.laneCountForType(spmdType.elem)
+}
+
+// computeEffectiveLaneCount determines the effective lane count from accumulated
+// varying element sizes. The effective lane count is the minimum across all
+// unconstrained varying types (determined by the largest element type).
+func (check *Checker) computeEffectiveLaneCount(info *SPMDControlFlowInfo) int64 {
+	if len(info.varyingElemSizes) == 0 {
+		return int64(simd128CapacityBytes) / 4 // default: int32-sized lanes = 4 lanes
+	}
+	maxElemSize := int64(0)
+	for _, size := range info.varyingElemSizes {
+		if size > maxElemSize {
+			maxElemSize = size
+		}
+	}
+	if maxElemSize <= 0 {
+		return 4
+	}
+	return int64(simd128CapacityBytes) / maxElemSize
+}
+
+// computeFunctionLaneCount determines the effective lane count for an SPMD function
+// based on its varying parameter types. Returns 0 for non-SPMD functions.
+func (check *Checker) computeFunctionLaneCount(sig *Signature) int64 {
+	if sig.params == nil {
+		return 0
+	}
+	maxElemSize := int64(0)
+	found := false
+	for _, param := range sig.params.vars {
+		if spmdType, ok := param.typ.(*SPMDType); ok && spmdType.IsVarying() && !spmdType.IsConstrained() {
+			elemSize := check.getTypeSize(spmdType.elem)
+			if elemSize > maxElemSize {
+				maxElemSize = elemSize
+				found = true
+			}
+		}
+	}
+	if !found {
+		return 0
+	}
+	return int64(simd128CapacityBytes) / maxElemSize
 }
 
 // getTypeSize returns the size in bytes of a type
@@ -175,10 +186,10 @@ func (check *Checker) getTypeSize(typ Type) int64 {
 			return 2
 		case Uint32, Int32, Float32:
 			return 4
-		case Uint64, Int64, Float64:
+		case Int, Uint, Uint64, Int64, Float64:
 			return 8
 		case Uintptr, UnsafePointer:
-			return 8 // assuming 64-bit architecture
+			return 8 // 64-bit architecture (WASM64)
 		default:
 			return 8 // conservative default
 		}
@@ -192,12 +203,4 @@ func (check *Checker) getTypeSize(typ Type) int64 {
 	default:
 		return 8 // conservative default
 	}
-}
-
-// calculateGoForCapacity calculates total capacity needed for all varying variables in a go for loop
-func (check *Checker) calculateGoForCapacity(body syntax.Stmt) int64 {
-	// This is a simplified implementation
-	// In practice, we'd need to walk the AST and collect all varying variable declarations
-	// For now, return a placeholder that allows basic validation
-	return 0 // TODO: Implement AST walking to collect varying variables
 }
