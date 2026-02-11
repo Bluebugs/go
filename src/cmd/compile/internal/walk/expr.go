@@ -90,6 +90,20 @@ func walkExpr1(n ir.Node, init *ir.Nodes) ir.Node {
 	case ir.OGETG, ir.OGETCALLERSP:
 		return n
 
+	case ir.OSPMDLaneIndex:
+		return n
+
+	case ir.OSPMDSplat:
+		n := n.(*ir.UnaryExpr)
+		n.X = walkExpr(n.X, init)
+		return n
+
+	case ir.OSPMDAdd:
+		n := n.(*ir.BinaryExpr)
+		n.X = walkExpr(n.X, init)
+		n.Y = walkExpr(n.Y, init)
+		return n
+
 	case ir.OTYPE, ir.ONAME, ir.OLITERAL, ir.ONIL, ir.OLINKSYMOFFSET:
 		// TODO(mdempsky): Just return n; see discussion on CL 38655.
 		// Perhaps refactor to use Node.mayBeShared for these instead.

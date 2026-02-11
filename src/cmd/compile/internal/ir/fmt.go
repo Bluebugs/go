@@ -189,6 +189,9 @@ var OpPrec = []int{
 	OCOPY:             8,
 	ODELETE:           8,
 	OGETG:             8,
+	OSPMDLaneIndex:    8,
+	OSPMDSplat:        8,
+	OSPMDAdd:          4,
 	OLEN:              8,
 	OLITERAL:          8,
 	OMAKESLICE:        8,
@@ -749,7 +752,7 @@ func exprFmt(n Node, s fmt.State, prec int) {
 		}
 		fmt.Fprintf(s, "%v(%.v)", n.Op(), n.Args)
 
-	case OCALL, OCALLFUNC, OCALLINTER, OCALLMETH, OGETG:
+	case OCALL, OCALLFUNC, OCALLINTER, OCALLMETH, OGETG, OSPMDLaneIndex:
 		n := n.(*CallExpr)
 		exprFmt(n.Fun, s, nprec)
 		if n.IsDDD {

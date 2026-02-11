@@ -93,10 +93,41 @@ func walkRange(nrange *ir.RangeStmt) ir.Node {
 		init = append(init, ir.NewAssignStmt(base.Pos, hn, a))
 
 		nfor.Cond = ir.NewBinaryExpr(base.Pos, ir.OLT, hv1, hn)
-		nfor.Post = ir.NewAssignStmt(base.Pos, hv1, ir.NewBinaryExpr(base.Pos, ir.OADD, hv1, ir.NewInt(base.Pos, 1)))
 
-		if v1 != nil {
-			body = []ir.Node{rangeAssign(nrange, hv1)}
+		if nfor.IsSpmd && nfor.LaneCount > 1 {
+			// SPMD: stride by laneCount, make loop variable varying.
+			nfor.Post = ir.NewAssignStmt(base.Pos, hv1,
+				ir.NewBinaryExpr(base.Pos, ir.OADD, hv1,
+					ir.NewInt(base.Pos, nfor.LaneCount)))
+
+			if v1 != nil {
+				// i = OSPMDAdd(OSPMDSplat(hv1), OSPMDLaneIndex())
+				// Use the varying type from nrange.Key
+				varyingType := nrange.Key.Type()
+
+				laneIdx := ir.NewCallExpr(base.Pos, ir.OSPMDLaneIndex, nil, nil)
+				laneIdx.SetType(varyingType)
+				laneIdx.SetTypecheck(1)
+
+				splatted := ir.NewUnaryExpr(base.Pos, ir.OSPMDSplat, hv1)
+				splatted.SetType(varyingType)
+				splatted.SetTypecheck(1)
+
+				varyingIdx := ir.NewBinaryExpr(base.Pos, ir.OSPMDAdd, splatted, laneIdx)
+				varyingIdx.SetType(varyingType)
+				varyingIdx.SetTypecheck(1)
+
+				assign := ir.NewAssignStmt(base.Pos, nrange.Key, varyingIdx)
+				assign.SetTypecheck(1)
+				body = []ir.Node{assign}
+			}
+		} else {
+			// Normal: stride by 1.
+			nfor.Post = ir.NewAssignStmt(base.Pos, hv1,
+				ir.NewBinaryExpr(base.Pos, ir.OADD, hv1, ir.NewInt(base.Pos, 1)))
+			if v1 != nil {
+				body = []ir.Node{rangeAssign(nrange, hv1)}
+			}
 		}
 
 	case k == types.TARRAY, k == types.TSLICE, k == types.TPTR: // TPTR is pointer-to-array

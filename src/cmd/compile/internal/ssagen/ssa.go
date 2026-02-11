@@ -3710,6 +3710,21 @@ func (s *state) exprCheckPtr(n ir.Node, checkPtrOK bool) *ssa.Value {
 		n := n.(*ir.CallExpr)
 		return s.newValue1(ssa.OpGetCallerSP, n.Type(), s.mem())
 
+	case ir.OSPMDLaneIndex:
+		n := n.(*ir.CallExpr)
+		return s.newValue0(ssa.OpSPMDLaneIndex, n.Type())
+
+	case ir.OSPMDSplat:
+		n := n.(*ir.UnaryExpr)
+		a := s.expr(n.X)
+		return s.newValue1(ssa.OpSPMDSplat, n.Type(), a)
+
+	case ir.OSPMDAdd:
+		n := n.(*ir.BinaryExpr)
+		a := s.expr(n.X)
+		b := s.expr(n.Y)
+		return s.newValue2(ssa.OpSPMDAdd, n.Type(), a, b)
+
 	case ir.OAPPEND:
 		return s.append(n.(*ir.CallExpr), false)
 

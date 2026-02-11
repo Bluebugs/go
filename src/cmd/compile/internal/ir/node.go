@@ -308,6 +308,11 @@ const (
 	OGETG        // runtime.getg() (read g pointer)
 	OGETCALLERSP // internal/runtime/sys.GetCallerSP() (stack pointer in caller frame)
 
+	// SPMD opcodes
+	OSPMDLaneIndex // lane index vector [0, 1, ..., laneCount-1]
+	OSPMDSplat     // broadcast scalar to all lanes
+	OSPMDAdd       // SPMD vector addition
+
 	OEND
 )
 
