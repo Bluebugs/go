@@ -2117,6 +2117,13 @@ func (s *state) stmt(n ir.Node) {
 		s.startBlock(bEnd)
 
 	case ir.OSWITCH, ir.OSELECT:
+		if n.Op() == ir.OSWITCH {
+			sw := n.(*ir.SwitchStmt)
+			if s.inSPMDLoop && sw.IsVaryingSwitch {
+				s.spmdSwitchStmt(sw)
+				break
+			}
+		}
 		// These have been mostly rewritten by the front end into their Nbody fields.
 		// Our main task is to correctly hook up any break statements.
 		bEnd := s.f.NewBlock(ssa.BlockPlain)

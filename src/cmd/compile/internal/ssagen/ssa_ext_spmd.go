@@ -337,3 +337,88 @@ func (s *state) spmdMergeVars(condValue *ssa.Value, snapshot, trueVars map[ir.No
 		s.vars[varNode] = s.newValue3(ssa.OpSPMDSelect, falseVal.Type, condValue, trueVal, falseVal)
 	}
 }
+
+// spmdSwitchStmt generates SSA for a varying-condition switch inside an SPMD loop.
+// All case branches execute with per-lane masking; modified variables are merged
+// using SPMDSelect, following the same pattern as spmdIfStmt.
+func (s *state) spmdSwitchStmt(n *ir.SwitchStmt) {
+	savedMask := s.spmdMask
+	boolType := types.Types[types.TBOOL]
+
+	// Evaluate the tag expression (varying value being switched on)
+	tagVal := s.expr(n.Tag)
+
+	// Snapshot vars before any case body execution
+	snapshot := s.snapshotVars()
+
+	// Phase 1: Compute per-case masks (mutually exclusive).
+	// remainingMask tracks lanes not yet claimed by any case.
+	remainingMask := savedMask
+	caseMasks := make([]*ssa.Value, len(n.Cases))
+	defaultIdx := -1
+
+	for i, clause := range n.Cases {
+		if len(clause.List) == 0 {
+			// default case — gets remaining mask after all explicit cases
+			defaultIdx = i
+			continue
+		}
+
+		// Build OR of equalities for multi-value cases: case val1, val2, ...
+		var caseCond *ssa.Value
+		for _, caseExpr := range clause.List {
+			caseVal := s.expr(caseExpr)
+			// Splat the (uniform) case value to all lanes
+			splatVal := s.newValue1(ssa.OpSPMDSplat, tagVal.Type, caseVal)
+			eq := s.newValue2(ssa.OpSPMDEqual, boolType, tagVal, splatVal)
+			if caseCond == nil {
+				caseCond = eq
+			} else {
+				caseCond = s.newValue2(ssa.OpSPMDMaskOr, boolType, caseCond, eq)
+			}
+		}
+
+		// Intersect with remaining mask (lanes not yet claimed)
+		caseMasks[i] = s.newValue2(ssa.OpSPMDMaskAnd, boolType, remainingMask, caseCond)
+		// Remove claimed lanes from remaining
+		remainingMask = s.newValue2(ssa.OpSPMDMaskAndNot, boolType, remainingMask, caseCond)
+	}
+
+	if defaultIdx >= 0 {
+		caseMasks[defaultIdx] = remainingMask
+	}
+
+	// Phase 2: Execute each case body and accumulate merged results.
+	// Start with the pre-switch snapshot as the accumulated state.
+	accumulated := s.snapshotVars()
+
+	for i, clause := range n.Cases {
+		if caseMasks[i] == nil {
+			continue // case with no mask (shouldn't happen, but be defensive)
+		}
+
+		// Each case starts from pre-switch state
+		s.restoreVarsSnapshot(snapshot)
+		s.spmdMask = caseMasks[i]
+
+		// Execute case body
+		s.stmtList(clause.Body)
+
+		// Merge: for each var modified by this case, select between case value and accumulated value
+		for varNode, caseVal := range s.vars {
+			accVal := accumulated[varNode]
+			if accVal == nil {
+				// New variable only in this case; carry forward
+				accumulated[varNode] = caseVal
+				continue
+			}
+			if caseVal == accVal {
+				continue // not modified
+			}
+			accumulated[varNode] = s.newValue3(ssa.OpSPMDSelect, caseVal.Type, caseMasks[i], caseVal, accVal)
+		}
+	}
+
+	s.vars = accumulated
+	s.spmdMask = savedMask
+}

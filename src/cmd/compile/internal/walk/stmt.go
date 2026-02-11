@@ -158,6 +158,21 @@ func walkStmt(n ir.Node) ir.Node {
 
 	case ir.OSWITCH:
 		n := n.(*ir.SwitchStmt)
+		if n.IsVaryingSwitch {
+			// Varying switches are handled directly in SSA with per-case masking.
+			// Skip walkSwitch to preserve Tag and Cases (walkSwitchExpr clears them).
+			// Walk tag, case values, and case bodies so sub-expressions are properly lowered.
+			if n.Tag != nil {
+				n.Tag = walkExpr(n.Tag, n.PtrInit())
+			}
+			for _, cas := range n.Cases {
+				for i := range cas.List {
+					cas.List[i] = walkExpr(cas.List[i], &cas.Body)
+				}
+				walkStmtList(cas.Body)
+			}
+			return n
+		}
 		walkSwitch(n)
 		return n
 

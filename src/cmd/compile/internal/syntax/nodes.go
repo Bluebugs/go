@@ -423,10 +423,11 @@ type (
 	}
 
 	SwitchStmt struct {
-		Init   SimpleStmt
-		Tag    Expr // incl. *TypeSwitchGuard
-		Body   []*CaseClause
-		Rbrace Pos
+		Init            SimpleStmt
+		Tag             Expr // incl. *TypeSwitchGuard
+		Body            []*CaseClause
+		Rbrace          Pos
+		IsVaryingSwitch bool // true if Tag is a varying type (set by type checker)
 		stmt
 	}
 

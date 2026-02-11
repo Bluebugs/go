@@ -471,7 +471,8 @@ type SwitchStmt struct {
 	Label *types.Sym
 
 	// TODO(rsc): Instead of recording here, replace with a block?
-	Compiled Nodes // compiled form, after walkSwitch
+	Compiled        Nodes // compiled form, after walkSwitch
+	IsVaryingSwitch bool  // true if Tag has varying type (SPMD)
 }
 
 func NewSwitchStmt(pos src.XPos, tag Node, cases []*CaseClause) *SwitchStmt {

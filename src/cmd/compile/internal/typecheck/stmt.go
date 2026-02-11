@@ -549,6 +549,23 @@ func tcSwitch(n *ir.SwitchStmt) {
 }
 
 func tcSwitchExpr(n *ir.SwitchStmt) {
+	// Varying switches have already been fully validated by types2.
+	// Skip old typecheck case-type matching which doesn't understand SPMD types.
+	if n.IsVaryingSwitch {
+		if n.Tag != nil {
+			n.Tag = Expr(n.Tag)
+			n.Tag = DefaultLit(n.Tag, nil)
+		}
+		for _, ncase := range n.Cases {
+			for i := range ncase.List {
+				ncase.List[i] = Expr(ncase.List[i])
+				ncase.List[i] = DefaultLit(ncase.List[i], nil)
+			}
+			Stmts(ncase.Body)
+		}
+		return
+	}
+
 	t := types.Types[types.TBOOL]
 	if n.Tag != nil {
 		n.Tag = Expr(n.Tag)

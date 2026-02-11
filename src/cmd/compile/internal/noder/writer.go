@@ -1634,7 +1634,7 @@ func (w *writer) switchStmt(stmt *syntax.SwitchStmt) {
 	w.pos(stmt)
 	w.stmt(stmt.Init)
 
-	var iface, tagType types2.Type
+	var iface, tagType, caseType types2.Type
 	var tagTypeIsChan bool
 	if guard, ok := stmt.Tag.(*syntax.TypeSwitchGuard); w.Bool(ok) {
 		iface = w.p.typeOf(guard.X)
@@ -1656,10 +1656,18 @@ func (w *writer) switchStmt(stmt *syntax.SwitchStmt) {
 		if tag != nil {
 			tv := w.p.typeAndValue(tag)
 			tagType = tv.Type
+			caseType = tagType
+			// For varying switches, case values are uniform (scalar) constants
+			// compared per-lane against the varying tag. Use the element type
+			// for case expression conversion, but keep tagType as-is for the tag.
+			if spmdType, ok := tagType.(*types2.SPMDType); ok {
+				caseType = spmdType.Elem()
+			}
 			tagValue = tv.Value
 			_, tagTypeIsChan = tagType.Underlying().(*types2.Chan)
 		} else {
 			tagType = types2.Typ[types2.Bool]
+			caseType = tagType
 			tagValue = constant.MakeBool(true)
 		}
 
@@ -1718,8 +1726,8 @@ func (w *writer) switchStmt(stmt *syntax.SwitchStmt) {
 		Outer:
 			for _, clause := range stmt.Body {
 				for _, cas := range syntax.UnpackListExpr(clause.Cases) {
-					if casType := w.p.typeOf(cas); !types2.AssignableTo(casType, tagType) && (types2.IsInterface(casType) || types2.IsInterface(tagType)) {
-						tagType = types2.NewInterfaceType(nil, nil)
+					if casType := w.p.typeOf(cas); !types2.AssignableTo(casType, caseType) && (types2.IsInterface(casType) || types2.IsInterface(caseType)) {
+						caseType = types2.NewInterfaceType(nil, nil)
 						break Outer
 					}
 				}
@@ -1757,7 +1765,7 @@ func (w *writer) switchStmt(stmt *syntax.SwitchStmt) {
 			w.Sync(pkgbits.SyncExprs)
 			w.Len(len(cases))
 			for _, cas := range cases {
-				typ := tagType
+				typ := caseType
 				if tagTypeIsChan {
 					typ = nil
 				}
@@ -1789,6 +1797,7 @@ func (w *writer) switchStmt(stmt *syntax.SwitchStmt) {
 	}
 
 	w.closeScope(stmt.Rbrace)
+	w.Bool(stmt.IsVaryingSwitch) // SPMD: varying switch flag
 }
 
 func (w *writer) label(label *syntax.Name) {

@@ -2098,6 +2098,7 @@ func (r *reader) switchStmt(label *types.Sym) ir.Node {
 	if init != nil {
 		n.SetInit([]ir.Node{init})
 	}
+	n.IsVaryingSwitch = r.Bool() // SPMD: varying switch flag
 	return n
 }
 
