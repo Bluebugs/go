@@ -426,6 +426,11 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 	// reset context for statements of inner blocks
 	inner := ctxt &^ (fallthroughOk | finalSwitchCase | inTypeSwitch)
 
+	// Handle SPMD-specific statement validation
+	if check.handleSPMDStatement(s, ctxt) {
+		return
+	}
+
 	switch s := s.(type) {
 	case *ast.BadStmt, *ast.EmptyStmt:
 		// ignore

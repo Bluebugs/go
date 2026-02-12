@@ -9,6 +9,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/token"
+	"internal/buildcfg"
 	. "internal/types/errors"
 	"slices"
 )
@@ -771,6 +772,11 @@ func (check *Checker) funcDecl(obj *Func, decl *declInfo) {
 	// so that Scope.Innermost works correctly.
 	sig.scope.pos = fdecl.Pos()
 	sig.scope.end = fdecl.End()
+
+	// SPMD function signature validation
+	if buildcfg.Experiment.SPMD {
+		check.validateSPMDFunctionSignature(fdecl, sig)
+	}
 
 	if fdecl.Type.TypeParams.NumFields() > 0 && fdecl.Body == nil {
 		check.softErrorf(fdecl.Name, BadDecl, "generic function is missing function body")

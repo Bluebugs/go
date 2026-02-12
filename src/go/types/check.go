@@ -160,6 +160,7 @@ type Checker struct {
 	objPath    []Object              // path of object dependencies during type-checking (for cycle reporting)
 	objPathIdx map[Object]int        // map of object to object path index during type-checking (for cycle reporting)
 	cleaners   []cleaner             // list of types that may need a final cleanup at the end of type-checking
+	spmdInfo   SPMDControlFlowInfo   // SPMD control flow tracking
 
 	// environment within which the current object is type-checked (valid only
 	// for the duration of type-checking a specific object)
