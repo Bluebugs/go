@@ -355,7 +355,10 @@ var depsRules = `
 	FMT, sort
 	< go/doc/comment;
 
-	go/internal/typeparams, go/build/constraint
+	FMT, internal/goexperiment
+	< internal/buildcfg;
+
+	go/internal/typeparams, go/build/constraint, internal/buildcfg
 	< go/parser;
 
 	go/doc/comment, go/parser, text/tabwriter
@@ -364,9 +367,6 @@ var depsRules = `
 
 	math/big, go/token
 	< go/constant;
-
-	FMT, internal/goexperiment
-	< internal/buildcfg;
 
 	container/heap, go/constant, go/parser, internal/buildcfg, internal/goversion, internal/types/errors
 	< go/types;

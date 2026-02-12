@@ -30,6 +30,7 @@ import (
 	"go/build/constraint"
 	"go/scanner"
 	"go/token"
+	"internal/buildcfg"
 	"strings"
 )
 
@@ -2018,6 +2019,12 @@ func (p *parser) parseGoStmt() ast.Stmt {
 	}
 
 	pos := p.expect(token.GO)
+
+	// SPMD: "go for" loop syntax (GOEXPERIMENT=spmd)
+	if buildcfg.Experiment.SPMD && p.tok == token.FOR {
+		return p.parseSpmdForStmt(pos)
+	}
+
 	call := p.parseCallExpr("go")
 	p.expectSemi()
 	if call == nil {
@@ -2025,6 +2032,125 @@ func (p *parser) parseGoStmt() ast.Stmt {
 	}
 
 	return &ast.GoStmt{Go: pos, Call: call}
+}
+
+// parseSpmdForStmt parses SPMD "go for" range loops.
+// It handles:
+//   - go for range X { }
+//   - go for range[N] X { }
+//   - go for key := range X { }
+//   - go for key := range[N] X { }
+//   - go for key, value := range X { }
+//   - go for key, value := range[N] X { }
+// The goPos parameter is the position of the "go" keyword.
+func (p *parser) parseSpmdForStmt(goPos token.Pos) ast.Stmt {
+	if p.trace {
+		defer un(trace(p, "SpmdForStmt"))
+	}
+
+	p.expect(token.FOR)
+
+	prevLev := p.exprLev
+	p.exprLev = -1
+
+	var key, value ast.Expr
+	var tokPos token.Pos
+	var tok token.Token
+	var rangePos token.Pos
+	var constraint ast.Expr
+	var x ast.Expr
+
+	if p.tok == token.RANGE {
+		// "go for range ..." or "go for range[N] ..."
+		rangePos = p.pos
+		p.next()
+		constraint = p.parseSpmdConstraint()
+		x = p.parseRhs()
+	} else if p.tok != token.LBRACE {
+		// Parse LHS expressions (key or key, value), then := or = then range[N] expr
+		lhs := p.parseList(false)
+
+		// Expect := or =
+		if p.tok == token.DEFINE || p.tok == token.ASSIGN {
+			tokPos = p.pos
+			tok = p.tok
+			p.next()
+		} else {
+			p.exprLev = prevLev
+			p.error(p.pos, "go for requires range clause")
+			body := p.parseBlockStmt()
+			p.expectSemi()
+			return &ast.BadStmt{From: goPos, To: body.End()}
+		}
+
+		// Expect range keyword
+		if p.tok != token.RANGE {
+			p.exprLev = prevLev
+			p.error(p.pos, "go for requires range clause")
+			body := p.parseBlockStmt()
+			p.expectSemi()
+			return &ast.BadStmt{From: goPos, To: body.End()}
+		}
+		rangePos = p.pos
+		p.next()
+
+		constraint = p.parseSpmdConstraint()
+		x = p.parseRhs()
+
+		switch len(lhs) {
+		case 1:
+			key = lhs[0]
+		case 2:
+			key, value = lhs[0], lhs[1]
+		default:
+			p.exprLev = prevLev
+			p.errorExpected(lhs[len(lhs)-1].Pos(), "at most 2 expressions")
+			body := p.parseBlockStmt()
+			p.expectSemi()
+			return &ast.BadStmt{From: goPos, To: body.End()}
+		}
+	} else {
+		// "go for { }" - error: SPMD requires range
+		p.exprLev = prevLev
+		p.error(p.pos, "go for requires range clause")
+		body := p.parseBlockStmt()
+		p.expectSemi()
+		return &ast.BadStmt{From: goPos, To: body.End()}
+	}
+
+	p.exprLev = prevLev
+
+	body := p.parseBlockStmt()
+	p.expectSemi()
+
+	return &ast.RangeStmt{
+		For:        goPos,
+		Key:        key,
+		Value:      value,
+		TokPos:     tokPos,
+		Tok:        tok,
+		Range:      rangePos,
+		X:          x,
+		Body:       body,
+		IsSpmd:     true,
+		Constraint: constraint,
+	}
+}
+
+// parseSpmdConstraint parses the optional [N] constraint after "range" in SPMD loops.
+// Returns nil if no constraint is present.
+func (p *parser) parseSpmdConstraint() ast.Expr {
+	if p.tok != token.LBRACK {
+		return nil
+	}
+	p.next() // consume [
+	if p.tok == token.RBRACK {
+		p.next() // consume ] — empty/universal constraint
+		return nil
+	}
+	constraint := p.parseRhs()
+	p.expect(token.RBRACK)
+	return constraint
 }
 
 func (p *parser) parseDeferStmt() ast.Stmt {

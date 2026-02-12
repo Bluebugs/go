@@ -268,6 +268,9 @@ func Walk(v Visitor, node Node) {
 		if n.Value != nil {
 			Walk(v, n.Value)
 		}
+		if n.Constraint != nil {
+			Walk(v, n.Constraint)
+		}
 		Walk(v, n.X)
 		Walk(v, n.Body)
 
