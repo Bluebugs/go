@@ -416,6 +416,7 @@ func TestSpec(t *testing.T)      { testDirFiles(t, "../../internal/types/testdat
 func TestExamples(t *testing.T)  { testDirFiles(t, "../../internal/types/testdata/examples", false) }
 func TestFixedbugs(t *testing.T) { testDirFiles(t, "../../internal/types/testdata/fixedbugs", false) }
 func TestLocal(t *testing.T)     { testDirFiles(t, "testdata/local", false) }
+func TestSPMDTypeChecking(t *testing.T) { testDirFiles(t, "testdata/spmd", false) }
 
 func testDirFiles(t *testing.T, dir string, manual bool) {
 	testenv.MustHaveGoBuild(t)
