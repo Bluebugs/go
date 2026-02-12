@@ -62,12 +62,15 @@ var depsRules = `
 	  internal/syslist,
 	  internal/trace/tracev2,
 	  internal/trace/traceviewer/format,
+	  lanes,
 	  log/internal,
 	  math/bits,
 	  structs,
 	  unicode,
 	  unicode/utf8,
 	  unicode/utf16;
+
+	lanes < reduce;
 
 	internal/goarch < internal/abi;
 	internal/byteorder, internal/cpu, internal/goarch < internal/chacha8rand;
