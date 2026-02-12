@@ -330,6 +330,12 @@ func (r *reader) doTyp() (res types.Type) {
 		return r.interfaceType()
 	case pkgbits.TypeUnion:
 		return r.unionType()
+	case pkgbits.TypeSPMD:
+		isVarying := r.Bool()
+		if isVarying {
+			r.Int64() // consume constraint, not used in go/types
+		}
+		return r.typ()
 	}
 }
 
