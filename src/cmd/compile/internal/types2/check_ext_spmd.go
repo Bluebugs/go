@@ -59,7 +59,7 @@ func (check *Checker) validateSPMDFunctionSignature(fdecl *syntax.FuncDecl, sig 
 			// Allow public varying functions in lanes and reduce packages
 			pkgName := check.pkg.name
 			if pkgName != "lanes" && pkgName != "reduce" {
-				check.error(fdecl, InvalidSPMDFunction, "public functions cannot have varying parameters")
+				check.error(fdecl, InvalidSPMDFunc, "public functions cannot have varying parameters")
 			}
 		}
 	}
@@ -74,7 +74,7 @@ func (check *Checker) validateSPMDFunctionSignature(fdecl *syntax.FuncDecl, sig 
 					// Allow public varying return functions in lanes and reduce packages
 					pkgName := check.pkg.name
 					if pkgName != "lanes" && pkgName != "reduce" {
-						check.error(fdecl, InvalidSPMDFunction, "public functions cannot return varying types")
+						check.error(fdecl, InvalidSPMDFunc, "public functions cannot return varying types")
 						return
 					}
 				}
@@ -85,7 +85,7 @@ func (check *Checker) validateSPMDFunctionSignature(fdecl *syntax.FuncDecl, sig 
 	// Rule 3: Functions with varying parameters cannot contain go for loops
 	if hasVaryingParams && fdecl.Body != nil {
 		if check.hasGoForInSPMDFunction(fdecl.Body) {
-			check.error(fdecl, InvalidSPMDFunction, "functions with varying parameters cannot contain go for loops")
+			check.error(fdecl, InvalidSPMDFunc, "functions with varying parameters cannot contain go for loops")
 		}
 	}
 

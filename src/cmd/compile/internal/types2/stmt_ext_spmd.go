@@ -381,7 +381,7 @@ func (check *Checker) validateSPMDFunction(name *syntax.Name, sig *Signature, bo
 		if name != nil && name.Value != "" && token.IsExported(name.Value) {
 			pkgPath := check.pkg.path
 			if pkgPath != "lanes" && pkgPath != "reduce" {
-				check.error(name, InvalidSPMDFunction, "public functions cannot have varying parameters (except in lanes/reduce packages)")
+				check.error(name, InvalidSPMDFunc, "public functions cannot have varying parameters (except in lanes/reduce packages)")
 			}
 		}
 
@@ -410,7 +410,7 @@ func (check *Checker) hasSPMDParameters(sig *Signature) bool {
 func (check *Checker) checkNoGoForInSPMDFunction(body *syntax.BlockStmt) {
 	syntax.Inspect(body, func(n syntax.Node) bool {
 		if forStmt, ok := n.(*syntax.ForStmt); ok && forStmt.IsSpmd {
-			check.error(forStmt, InvalidSPMDFunction, "functions with varying parameters cannot contain go for loops")
+			check.error(forStmt, InvalidSPMDFunc, "functions with varying parameters cannot contain go for loops")
 		}
 		return true
 	})
