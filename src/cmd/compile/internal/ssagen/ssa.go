@@ -1680,6 +1680,11 @@ func (s *state) stmt(n ir.Node) {
 	// Expression statements
 	case ir.OCALLFUNC:
 		n := n.(*ir.CallExpr)
+		if s.inSPMDLoop {
+			if v := s.spmdBuiltinCall(n); v != nil {
+				return // result discarded in statement context
+			}
+		}
 		if ir.IsIntrinsicCall(n) {
 			s.intrinsicCall(n)
 			return
@@ -3708,6 +3713,11 @@ func (s *state) exprCheckPtr(n ir.Node, checkPtrOK bool) *ssa.Value {
 
 	case ir.OCALLFUNC:
 		n := n.(*ir.CallExpr)
+		if s.inSPMDLoop {
+			if v := s.spmdBuiltinCall(n); v != nil {
+				return v
+			}
+		}
 		if ir.IsIntrinsicCall(n) {
 			return s.intrinsicCall(n)
 		}

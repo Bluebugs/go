@@ -33,6 +33,7 @@ type Varying[T any] struct{ _ [0]T }
 // Can only be called within go for loops or SPMD functions (functions with varying parameters).
 // COMPILER BUILTIN: This function cannot be implemented in Go - it must be handled
 // by the compiler as a builtin that generates lane index vectors like [0,1,2,3].
+//go:noinline
 func Index() Varying[int] {
 	// This is a compiler builtin - execution should never reach here
 	panic("lanes.Index is a compiler builtin and should be replaced during compilation")
@@ -42,6 +43,7 @@ func Index() Varying[int] {
 // This is determined at compile time based on the SIMD width and element type.
 // COMPILER BUILTIN: Should be replaced with compile-time constant, but provides
 // PoC implementation for Phase 1.8 testing until compiler handles it.
+//go:noinline
 func Count[T any](value Varying[T]) int {
 	// Phase 1.8: Runtime type inspection for PoC - WASM SIMD128 calculation
 	// Formula: 128 bits / (sizeof(T) * 8 bits) = lane count
@@ -69,12 +71,14 @@ func Count[T any](value Varying[T]) int {
 
 // Broadcast takes a value from the specified lane and broadcasts it to all lanes.
 // COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
+//go:noinline
 func Broadcast[T any](value Varying[T], lane int) Varying[T] {
 	// Direct builtin call - constrained Varying[T, N] support in Phase 2
 	return broadcastBuiltin(value, lane)
 }
 
 // broadcastBuiltin is the actual compiler builtin for regular varying types only
+//go:noinline
 func broadcastBuiltin[T any](value Varying[T], lane int) Varying[T] {
 	// This is a compiler builtin - execution should never reach here
 	panic("lanes.broadcastBuiltin is a compiler builtin and should be replaced during compilation")
@@ -83,12 +87,14 @@ func broadcastBuiltin[T any](value Varying[T], lane int) Varying[T] {
 // Rotate shifts values across lanes by the specified offset.
 // Positive offset rotates right, negative rotates left.
 // COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
+//go:noinline
 func Rotate[T any](value Varying[T], offset int) Varying[T] {
 	// Direct builtin call - constrained Varying[T, N] support in Phase 2
 	return rotateBuiltin(value, offset)
 }
 
 // rotateBuiltin is the actual compiler builtin for regular varying types only
+//go:noinline
 func rotateBuiltin[T any](value Varying[T], offset int) Varying[T] {
 	// This is a compiler builtin - execution should never reach here
 	panic("lanes.rotateBuiltin is a compiler builtin and should be replaced during compilation")
@@ -98,6 +104,7 @@ func rotateBuiltin[T any](value Varying[T], offset int) Varying[T] {
 // Each lane gets the corresponding slice element.
 // COMPILER BUILTIN: This function cannot be implemented in Go - it must be handled
 // by the compiler as a builtin intrinsic that generates SIMD load instructions.
+//go:noinline
 func From[T any](data []T) Varying[T] {
 	// This is a compiler builtin - execution should never reach here
 	panic("lanes.From is a compiler builtin and should be replaced during compilation")
@@ -106,6 +113,7 @@ func From[T any](data []T) Varying[T] {
 // FromConstrained converts constrained varying to unconstrained varying plus mask.
 // Returns (values, mask) where mask indicates which lanes are active.
 // COMPILER BUILTIN: This function converts Varying[T, 0] to array of Varying[T] values
+//go:noinline
 func FromConstrained[T any](data Varying[T]) ([]Varying[T], []Varying[bool]) {
 	// This is a compiler builtin - execution should never reach here
 	// Phase 2: Compiler should replace with conversion that:
@@ -117,6 +125,7 @@ func FromConstrained[T any](data Varying[T]) ([]Varying[T], []Varying[bool]) {
 
 // ToConstrained converts unconstrained varying arrays back to constrained varying.
 // COMPILER BUILTIN
+//go:noinline
 func ToConstrained[T any](data []Varying[T], mask []Varying[bool], target Varying[T]) Varying[T] {
 	// This is a compiler builtin - execution should never reach here
 	// Phase 2: Compiler should replace with conversion that:
@@ -127,12 +136,14 @@ func ToConstrained[T any](data []Varying[T], mask []Varying[bool], target Varyin
 
 // Swizzle performs arbitrary permutation of lane values based on indices.
 // COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
+//go:noinline
 func Swizzle[T any](value Varying[T], indices Varying[int]) Varying[T] {
 	// Direct builtin call - constrained Varying[T, N] support in Phase 2
 	return swizzleBuiltin(value, indices)
 }
 
 // swizzleBuiltin is the actual compiler builtin for regular varying types only
+//go:noinline
 func swizzleBuiltin[T any](value Varying[T], indices Varying[int]) Varying[T] {
 	// This is a compiler builtin - execution should never reach here
 	panic("lanes.swizzleBuiltin is a compiler builtin and should be replaced during compilation")
@@ -140,12 +151,14 @@ func swizzleBuiltin[T any](value Varying[T], indices Varying[int]) Varying[T] {
 
 // ShiftLeft performs per-lane left shift operation.
 // COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
+//go:noinline
 func ShiftLeft[T integer](value Varying[T], shift Varying[T]) Varying[T] {
 	// Direct builtin call - constrained Varying[T, N] support in Phase 2
 	return shiftLeftBuiltin(value, shift)
 }
 
 // shiftLeftBuiltin is the actual compiler builtin for regular varying types only
+//go:noinline
 func shiftLeftBuiltin[T integer](value Varying[T], shift Varying[T]) Varying[T] {
 	// This is a compiler builtin - execution should never reach here
 	panic("lanes.shiftLeftBuiltin is a compiler builtin and should be replaced during compilation")
@@ -153,12 +166,14 @@ func shiftLeftBuiltin[T integer](value Varying[T], shift Varying[T]) Varying[T] 
 
 // ShiftRight performs per-lane right shift operation.
 // COMPILER BUILTIN for regular varying types. Constrained varying handled in Phase 2.
+//go:noinline
 func ShiftRight[T integer](value Varying[T], shift Varying[T]) Varying[T] {
 	// Direct builtin call - constrained Varying[T, N] support in Phase 2
 	return shiftRightBuiltin(value, shift)
 }
 
 // shiftRightBuiltin is the actual compiler builtin for regular varying types only
+//go:noinline
 func shiftRightBuiltin[T integer](value Varying[T], shift Varying[T]) Varying[T] {
 	// This is a compiler builtin - execution should never reach here
 	panic("lanes.shiftRightBuiltin is a compiler builtin and should be replaced during compilation")

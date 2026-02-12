@@ -9,6 +9,7 @@ import (
 	"cmd/compile/internal/ssa"
 	"cmd/compile/internal/types"
 	"cmd/internal/src"
+	"strings"
 )
 
 // spmdForStmt generates SSA for an SPMD "go for" loop.
@@ -452,4 +453,206 @@ func isVaryingSPMDValue(v *ssa.Value) bool {
 		return true
 	}
 	return false
+}
+
+// spmdBuiltinCall intercepts calls to lanes and reduce package functions
+// during SSA generation inside SPMD loops. If the call matches a known
+// builtin, it is replaced with the corresponding SPMD SSA opcode.
+// Returns nil if the call is not a recognized SPMD builtin.
+func (s *state) spmdBuiltinCall(n *ir.CallExpr) *ssa.Value {
+	if n.Fun.Op() != ir.ONAME {
+		return nil
+	}
+	sym := n.Fun.(*ir.Name).Sym()
+	if sym == nil || sym.Pkg == nil {
+		return nil
+	}
+	pkg := sym.Pkg.Path
+	fn := sym.Name
+
+	// Strip type parameters from stenciled generic function names.
+	// e.g. "Add[int]" -> "Add"
+	if idx := strings.IndexByte(fn, '['); idx >= 0 {
+		fn = fn[:idx]
+	}
+
+	// Only intercept unconstrained (constraint == -1) and universal (constraint == 0) calls.
+	// Numerically constrained calls (constraint > 0) need loop decomposition (future phase).
+	for _, arg := range n.Args {
+		if argType := arg.Type(); argType != nil && argType.Kind() == types.TSPMD {
+			if c := argType.SPMDConstraint(); c > 0 {
+				return nil // constrained varying - fall through to normal call
+			}
+		}
+	}
+
+	switch pkg {
+	case "lanes":
+		return s.spmdLanesBuiltin(n, fn)
+	case "reduce":
+		return s.spmdReduceBuiltin(n, fn)
+	}
+	return nil
+}
+
+// spmdLanesBuiltin handles interception of lanes package function calls.
+// Maps 7 functions to SPMD SSA opcodes:
+//   - Index()           -> OpSPMDLaneIndex
+//   - Count(v)          -> OpSPMDLaneCount
+//   - Broadcast(v,lane) -> OpSPMDBroadcastLane
+//   - Rotate(v,offset)  -> OpSPMDRotate
+//   - Swizzle(v,idx)    -> OpSPMDSwizzle
+//   - ShiftLeft(v,fill) -> OpSPMDShiftLeft
+//   - ShiftRight(v,fill)-> OpSPMDShiftRight
+func (s *state) spmdLanesBuiltin(n *ir.CallExpr, fn string) *ssa.Value {
+	switch fn {
+	case "Index":
+		// No args, no validation needed
+		return s.newValue0(ssa.OpSPMDLaneIndex, n.Type())
+
+	case "Count":
+		// Count takes 1 arg (for type inference) but ignores it
+		if len(n.Args) != 1 {
+			return nil
+		}
+		return s.newValue0(ssa.OpSPMDLaneCount, n.Type())
+
+	case "Broadcast":
+		if len(n.Args) != 2 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue2(ssa.OpSPMDBroadcastLane, n.Type(), args[0], args[1])
+
+	case "Rotate":
+		if len(n.Args) != 2 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue2(ssa.OpSPMDRotate, n.Type(), args[0], args[1])
+
+	case "Swizzle":
+		if len(n.Args) != 2 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue2(ssa.OpSPMDSwizzle, n.Type(), args[0], args[1])
+
+	case "ShiftLeft", "shiftLeftBuiltin":
+		if len(n.Args) != 2 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue2(ssa.OpSPMDShiftLeft, n.Type(), args[0], args[1])
+
+	case "ShiftRight", "shiftRightBuiltin":
+		if len(n.Args) != 2 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue2(ssa.OpSPMDShiftRight, n.Type(), args[0], args[1])
+
+	case "broadcastBuiltin":
+		if len(n.Args) != 2 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue2(ssa.OpSPMDBroadcastLane, n.Type(), args[0], args[1])
+
+	case "rotateBuiltin":
+		if len(n.Args) != 2 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue2(ssa.OpSPMDRotate, n.Type(), args[0], args[1])
+
+	case "swizzleBuiltin":
+		if len(n.Args) != 2 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue2(ssa.OpSPMDSwizzle, n.Type(), args[0], args[1])
+	}
+	// Unrecognized (From, FromConstrained, ToConstrained) - fall through to normal call
+	return nil
+}
+
+// spmdReduceBuiltin handles interception of reduce package function calls.
+// Maps 9 functions to SPMD SSA opcodes:
+//   - Add(v)  -> OpSPMDReduceAdd
+//   - Mul(v)  -> OpSPMDReduceMul
+//   - Max(v)  -> OpSPMDReduceMax
+//   - Min(v)  -> OpSPMDReduceMin
+//   - Or(v)   -> OpSPMDReduceOr
+//   - And(v)  -> OpSPMDReduceAnd
+//   - Xor(v)  -> OpSPMDReduceXor
+//   - All(v)  -> OpSPMDMaskAllTrue
+//   - Any(v)  -> OpSPMDMaskAnyTrue
+func (s *state) spmdReduceBuiltin(n *ir.CallExpr, fn string) *ssa.Value {
+	switch fn {
+	case "Add":
+		if len(n.Args) != 1 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue1(ssa.OpSPMDReduceAdd, n.Type(), args[0])
+
+	case "Mul":
+		if len(n.Args) != 1 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue1(ssa.OpSPMDReduceMul, n.Type(), args[0])
+
+	case "Max":
+		if len(n.Args) != 1 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue1(ssa.OpSPMDReduceMax, n.Type(), args[0])
+
+	case "Min":
+		if len(n.Args) != 1 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue1(ssa.OpSPMDReduceMin, n.Type(), args[0])
+
+	case "Or":
+		if len(n.Args) != 1 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue1(ssa.OpSPMDReduceOr, n.Type(), args[0])
+
+	case "And":
+		if len(n.Args) != 1 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue1(ssa.OpSPMDReduceAnd, n.Type(), args[0])
+
+	case "Xor":
+		if len(n.Args) != 1 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue1(ssa.OpSPMDReduceXor, n.Type(), args[0])
+
+	case "All":
+		if len(n.Args) != 1 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue1(ssa.OpSPMDMaskAllTrue, n.Type(), args[0])
+
+	case "Any":
+		if len(n.Args) != 1 {
+			return nil
+		}
+		args := s.intrinsicArgs(n)
+		return s.newValue1(ssa.OpSPMDMaskAnyTrue, n.Type(), args[0])
+	}
+	// Unrecognized (From, Count, FindFirstSet, Mask) - fall through to normal call
+	return nil
 }
