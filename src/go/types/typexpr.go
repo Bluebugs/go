@@ -274,6 +274,10 @@ func (check *Checker) typInternal(e0 ast.Expr, def *TypeName) (T Type) {
 
 	case *ast.IndexExpr, *ast.IndexListExpr:
 		ix := unpackIndexedExpr(e)
+		// Check for lanes.Varying[T] or lanes.Varying[T, N] before generic instantiation
+		if t, handled := check.handleSPMDIndexExpr(ix, def); handled {
+			return t
+		}
 		check.verifyVersionf(inNode(e, ix.lbrack), go1_18, "type instantiation")
 		return check.instantiatedType(ix)
 
