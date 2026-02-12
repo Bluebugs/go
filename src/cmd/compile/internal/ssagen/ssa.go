@@ -515,6 +515,11 @@ func buildssa(fn *ir.Func, worker int, isPgoHot bool) *ssa.Func {
 		}
 	}
 
+	// Set up SPMD context for functions with varying parameters
+	if buildcfg.Experiment.SPMD && isSPMDFuncType(fn.Type()) {
+		s.spmdFuncEntry()
+	}
+
 	// Populate closure variables.
 	if fn.Needctxt() {
 		clo := s.entryNewValue0(ssa.OpGetClosurePtr, s.f.Config.Types.BytePtr)
@@ -1686,6 +1691,7 @@ func (s *state) stmt(n ir.Node) {
 			if v := s.spmdBuiltinCall(n); v != nil {
 				return // result discarded in statement context
 			}
+			s.spmdAnnotateCall(n)
 		}
 		if ir.IsIntrinsicCall(n) {
 			s.intrinsicCall(n)
@@ -3728,6 +3734,7 @@ func (s *state) exprCheckPtr(n ir.Node, checkPtrOK bool) *ssa.Value {
 			if v := s.spmdBuiltinCall(n); v != nil {
 				return v
 			}
+			s.spmdAnnotateCall(n)
 		}
 		if ir.IsIntrinsicCall(n) {
 			return s.intrinsicCall(n)

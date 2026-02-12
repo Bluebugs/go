@@ -790,6 +790,10 @@ var genericOps = []opData{
 	{name: "SPMDSwizzle", argLength: 2},             // value, indices -> arbitrary permutation
 	{name: "SPMDShiftLeft", argLength: 2},           // value, count -> shift lanes left (fill with zero)
 	{name: "SPMDShiftRight", argLength: 2},          // value, count -> shift lanes right (fill with zero)
+
+	// SPMD function call mask operations
+	{name: "SPMDCallSetMask", argLength: 1},   // arg0=mask. Annotates that the next SPMD function call receives this mask.
+	{name: "SPMDFuncEntryMask", argLength: 0}, // Produces the implicit mask parameter received by an SPMD function.
 }
 
 //     kind          controls          successors   implicit exit

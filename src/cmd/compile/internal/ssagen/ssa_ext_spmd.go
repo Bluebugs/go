@@ -826,3 +826,58 @@ func (s *state) spmdRegularForStmt(n *ir.ForStmt) {
 	breakValEnd := s.variable(breakMaskVar, boolType)
 	s.spmdMask = s.newValue2(ssa.OpSPMDMaskAndNot, boolType, entryMask, breakValEnd)
 }
+
+// isSPMDCallTarget reports whether the callee function has any varying (TSPMD) parameters,
+// making it an SPMD function that needs a mask parameter.
+func isSPMDCallTarget(n *ir.CallExpr) bool {
+	if n.Fun == nil {
+		return false
+	}
+	fnType := n.Fun.Type()
+	if fnType == nil {
+		return false
+	}
+	for _, p := range fnType.Params() {
+		if p.Type != nil && p.Type.Kind() == types.TSPMD {
+			return true
+		}
+	}
+	return false
+}
+
+// isSPMDFuncType reports whether a function type has any varying (TSPMD) parameters.
+func isSPMDFuncType(fnType *types.Type) bool {
+	if fnType == nil {
+		return false
+	}
+	for _, p := range fnType.Params() {
+		if p.Type != nil && p.Type.Kind() == types.TSPMD {
+			return true
+		}
+	}
+	return false
+}
+
+// spmdAnnotateCall emits an OpSPMDCallSetMask marker before a call to an SPMD function.
+// The marker carries the current SPMD mask, indicating which lanes are active for the callee.
+func (s *state) spmdAnnotateCall(n *ir.CallExpr) {
+	if !isSPMDCallTarget(n) {
+		return
+	}
+	boolType := types.Types[types.TBOOL]
+	mask := s.spmdMask
+	if mask == nil {
+		// Not in SPMD context — all lanes active
+		mask = s.newValue1(ssa.OpSPMDSplat, boolType, s.constBool(true))
+	}
+	s.newValue1(ssa.OpSPMDCallSetMask, boolType, mask)
+}
+
+// spmdFuncEntry sets up SPMD context for an SPMD function (one with varying parameters).
+// Emits OpSPMDFuncEntryMask to represent receiving the implicit mask, then enables
+// SPMD mode (mask tracking, varying control flow, builtin interception).
+func (s *state) spmdFuncEntry() {
+	boolType := types.Types[types.TBOOL]
+	s.spmdMask = s.newValue0(ssa.OpSPMDFuncEntryMask, boolType)
+	s.inSPMDLoop = true // enables SPMD context (builtin interception, regular for mask tracking, etc.)
+}

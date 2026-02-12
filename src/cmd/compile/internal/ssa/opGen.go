@@ -6202,6 +6202,8 @@ const (
 	OpSPMDSwizzle
 	OpSPMDShiftLeft
 	OpSPMDShiftRight
+	OpSPMDCallSetMask
+	OpSPMDFuncEntryMask
 	OpAESDecryptLastRoundUint8x16
 	OpAESDecryptLastRoundUint8x32
 	OpAESDecryptLastRoundUint8x64
@@ -89138,6 +89140,16 @@ var opcodeTable = [...]opInfo{
 	{
 		name:    "SPMDShiftRight",
 		argLen:  2,
+		generic: true,
+	},
+	{
+		name:    "SPMDCallSetMask",
+		argLen:  1,
+		generic: true,
+	},
+	{
+		name:    "SPMDFuncEntryMask",
+		argLen:  0,
 		generic: true,
 	},
 	{
