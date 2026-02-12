@@ -343,9 +343,14 @@ func (w *typeWriter) typ(typ Type) {
 		}
 
 	default:
+		// Try SPMD type handling first
+		if w.handleSPMDTypeString(typ) {
+			return
+		}
+
 		// For externally defined implementations of Type.
 		// Note: In this case cycles won't be caught.
-		w.string(t.String())
+		w.string(typ.String())
 	}
 }
 

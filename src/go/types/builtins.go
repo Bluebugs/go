@@ -13,6 +13,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/token"
+	"internal/buildcfg"
 	. "internal/types/errors"
 )
 
@@ -526,6 +527,11 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 		T := check.varType(arg0)
 		if !isValid(T) {
 			return
+		}
+
+		// SPMD validation: check for varying map keys
+		if buildcfg.Experiment.SPMD {
+			check.validateSPMDMakeType(arg0, T)
 		}
 
 		u, err := commonUnder(T, func(_, u Type) *typeError {
