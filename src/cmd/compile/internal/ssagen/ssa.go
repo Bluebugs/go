@@ -1038,8 +1038,10 @@ type state struct {
 	continueTo *ssa.Block // current target for plain continue statement
 
 	// SPMD mask tracking
-	inSPMDLoop bool       // true when generating code inside go for body
-	spmdMask   *ssa.Value // current lane execution mask (nil = all-true / not in SPMD)
+	inSPMDLoop       bool                // true when generating code inside go for body
+	spmdMask         *ssa.Value          // current lane execution mask (nil = all-true / not in SPMD)
+	spmdLoopMasks    *spmdLoopMaskState  // loop mask state for continue/break (nil = no masking)
+	spmdVaryingDepth int                 // >0 = inside spmdIfStmt/spmdSwitchStmt sequential execution
 
 	// current location where we're interpreting the AST
 	curBlock *ssa.Block
@@ -2019,6 +2021,11 @@ func (s *state) stmt(n ir.Node) {
 
 	case ir.OCONTINUE, ir.OBREAK:
 		n := n.(*ir.BranchStmt)
+		// SPMD varying context: use mask accumulation instead of block jump
+		if s.spmdVaryingDepth > 0 && s.spmdLoopMasks != nil && n.Label == nil {
+			s.spmdMaskedBranchStmt(n)
+			break
+		}
 		var to *ssa.Block
 		if n.Label == nil {
 			// plain break/continue
@@ -2050,6 +2057,10 @@ func (s *state) stmt(n ir.Node) {
 		n := n.(*ir.ForStmt)
 		if n.IsSpmd {
 			s.spmdForStmt(n)
+			break
+		}
+		if s.inSPMDLoop {
+			s.spmdRegularForStmt(n)
 			break
 		}
 		base.Assert(!n.DistinctVars) // Should all be rewritten before escape analysis

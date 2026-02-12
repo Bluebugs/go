@@ -7,10 +7,19 @@ package ssagen
 import (
 	"cmd/compile/internal/ir"
 	"cmd/compile/internal/ssa"
+	"cmd/compile/internal/typecheck"
 	"cmd/compile/internal/types"
 	"cmd/internal/src"
 	"strings"
 )
+
+// spmdLoopMaskState tracks per-lane continue/break masks for loops inside SPMD context.
+type spmdLoopMaskState struct {
+	continueMaskVar ir.Node            // synthetic var for continue mask (reset per iteration)
+	breakMaskVar    ir.Node            // synthetic var for break mask (persists across iterations), nil for go for
+	entryMask       *ssa.Value         // mask on loop entry
+	parent          *spmdLoopMaskState // for nested loops
+}
 
 // spmdForStmt generates SSA for an SPMD "go for" loop.
 //
@@ -43,9 +52,20 @@ func (s *state) spmdForStmt(n *ir.ForStmt) {
 	// Initialize all-true mask: SPMDSplat(true)
 	boolType := types.Types[types.TBOOL]
 	s.spmdMask = s.newValue1(ssa.OpSPMDSplat, boolType, s.constBool(true))
+
+	// Set up continue mask for go for body (break is forbidden under varying in go for)
+	continueMaskVar := typecheck.TempAt(n.Pos(), s.curfn, boolType)
+	prevLoopMasks := s.spmdLoopMasks
+	s.spmdLoopMasks = &spmdLoopMaskState{
+		continueMaskVar: continueMaskVar,
+		entryMask:       s.spmdMask,
+		parent:          prevLoopMasks,
+	}
+
 	defer func() {
 		s.inSPMDLoop = prevInSPMD
 		s.spmdMask = prevMask
+		s.spmdLoopMasks = prevLoopMasks
 	}()
 
 	bCond := s.f.NewBlock(ssa.BlockPlain)
@@ -133,6 +153,11 @@ func (s *state) spmdBodyWithTailMask(n *ir.ForStmt) {
 
 	// Reset mask to all-true at start of each iteration.
 	s.spmdMask = s.newValue1(ssa.OpSPMDSplat, boolType, s.constBool(true))
+
+	// Reset continue mask for this iteration
+	if s.spmdLoopMasks != nil {
+		s.vars[s.spmdLoopMasks.continueMaskVar] = s.newValue1(ssa.OpSPMDSplat, boolType, s.constBool(false))
+	}
 
 	if n.Cond == nil || len(n.Body) == 0 {
 		s.stmtList(n.Body)
@@ -255,6 +280,8 @@ func (s *state) spmdIfStmt(n *ir.IfStmt) {
 	// Snapshot vars before branches
 	snapshot := s.snapshotVars()
 
+	s.spmdVaryingDepth++
+
 	// Execute true branch with trueMask
 	s.spmdMask = trueMask
 	s.stmtList(n.Body)
@@ -271,8 +298,11 @@ func (s *state) spmdIfStmt(n *ir.IfStmt) {
 	// Merge modified variables using SPMDSelect
 	s.spmdMergeVars(condValue, snapshot, trueVars)
 
-	// Restore mask
+	s.spmdVaryingDepth--
+
+	// Restore mask, excluding lanes that continued/broke during this if
 	s.spmdMask = savedMask
+	s.spmdExcludeBranchMasks()
 }
 
 // snapshotVars returns a shallow copy of the current variable map.
@@ -411,7 +441,9 @@ func (s *state) spmdSwitchStmt(n *ir.SwitchStmt) {
 		s.spmdMask = caseMasks[i]
 
 		// Execute case body
+		s.spmdVaryingDepth++
 		s.stmtList(clause.Body)
+		s.spmdVaryingDepth--
 
 		// Merge: for each var modified by this case, select between case value and accumulated value
 		for varNode, caseVal := range s.vars {
@@ -430,6 +462,7 @@ func (s *state) spmdSwitchStmt(n *ir.SwitchStmt) {
 
 	s.vars = accumulated
 	s.spmdMask = savedMask
+	s.spmdExcludeBranchMasks()
 }
 
 // isVaryingSPMDValue reports whether v represents a varying (per-lane) value
@@ -655,4 +688,141 @@ func (s *state) spmdReduceBuiltin(n *ir.CallExpr, fn string) *ssa.Value {
 	}
 	// Unrecognized (From, Count, FindFirstSet, Mask) - fall through to normal call
 	return nil
+}
+
+// spmdMaskedBranchStmt handles continue/break inside varying context (spmdIfStmt/spmdSwitchStmt).
+// Instead of ending the block, it accumulates into mask variables and zeros spmdMask.
+func (s *state) spmdMaskedBranchStmt(n *ir.BranchStmt) {
+	boolType := types.Types[types.TBOOL]
+	lm := s.spmdLoopMasks
+
+	// Accumulate into continue mask (for both continue and break)
+	curCont := s.variable(lm.continueMaskVar, boolType)
+	newCont := s.newValue2(ssa.OpSPMDMaskOr, boolType, curCont, s.spmdMask)
+	s.vars[lm.continueMaskVar] = newCont
+
+	// For break: also accumulate into break mask (persists across iterations)
+	if n.Op() == ir.OBREAK && lm.breakMaskVar != nil {
+		curBreak := s.variable(lm.breakMaskVar, boolType)
+		newBreak := s.newValue2(ssa.OpSPMDMaskOr, boolType, curBreak, s.spmdMask)
+		s.vars[lm.breakMaskVar] = newBreak
+	}
+
+	// Zero out mask so remaining statements in this branch are skipped
+	s.spmdMask = s.newValue1(ssa.OpSPMDSplat, boolType, s.constBool(false))
+}
+
+// spmdExcludeBranchMasks subtracts accumulated continue/break masks from s.spmdMask.
+// Called after spmdIfStmt/spmdSwitchStmt restores the saved mask.
+func (s *state) spmdExcludeBranchMasks() {
+	if s.spmdLoopMasks == nil {
+		return
+	}
+	boolType := types.Types[types.TBOOL]
+	lm := s.spmdLoopMasks
+
+	contVal := s.variable(lm.continueMaskVar, boolType)
+	s.spmdMask = s.newValue2(ssa.OpSPMDMaskAndNot, boolType, s.spmdMask, contVal)
+
+	if lm.breakMaskVar != nil {
+		breakVal := s.variable(lm.breakMaskVar, boolType)
+		s.spmdMask = s.newValue2(ssa.OpSPMDMaskAndNot, boolType, s.spmdMask, breakVal)
+	}
+}
+
+// spmdRegularForStmt generates SSA for a regular for loop inside SPMD context.
+// Sets up continue/break mask tracking. Uniform continue/break still use block jumps;
+// varying continue/break (inside spmdIfStmt) use mask accumulation.
+func (s *state) spmdRegularForStmt(n *ir.ForStmt) {
+	boolType := types.Types[types.TBOOL]
+	entryMask := s.spmdMask
+
+	// Create synthetic variables for mask tracking
+	continueMaskVar := typecheck.TempAt(n.Pos(), s.curfn, boolType)
+	breakMaskVar := typecheck.TempAt(n.Pos(), s.curfn, boolType)
+
+	// Initialize break mask to all-false before loop
+	s.vars[breakMaskVar] = s.newValue1(ssa.OpSPMDSplat, boolType, s.constBool(false))
+
+	// Push loop mask state
+	prevLoopMasks := s.spmdLoopMasks
+	s.spmdLoopMasks = &spmdLoopMaskState{
+		continueMaskVar: continueMaskVar,
+		breakMaskVar:    breakMaskVar,
+		entryMask:       entryMask,
+		parent:          prevLoopMasks,
+	}
+	defer func() { s.spmdLoopMasks = prevLoopMasks }()
+
+	// Standard 4-block loop structure
+	bCond := s.f.NewBlock(ssa.BlockPlain)
+	bBody := s.f.NewBlock(ssa.BlockPlain)
+	bIncr := s.f.NewBlock(ssa.BlockPlain)
+	bEnd := s.f.NewBlock(ssa.BlockPlain)
+	bBody.Pos = n.Pos()
+
+	b := s.endBlock()
+	b.AddEdgeTo(bCond)
+
+	// Condition block
+	s.startBlock(bCond)
+	if n.Cond != nil {
+		s.condBranch(n.Cond, bBody, bEnd, 1)
+	} else {
+		b := s.endBlock()
+		b.Kind = ssa.BlockPlain
+		b.AddEdgeTo(bBody)
+	}
+
+	// Set up continue/break targets (for uniform jumps)
+	prevContinue := s.continueTo
+	prevBreak := s.breakTo
+	s.continueTo = bIncr
+	s.breakTo = bEnd
+	var lab *ssaLabel
+	if sym := n.Label; sym != nil {
+		lab = s.label(sym)
+		lab.continueTarget = bIncr
+		lab.breakTarget = bEnd
+	}
+
+	// Body block
+	s.startBlock(bBody)
+
+	// Reset continue mask and compute active mask at iteration start
+	s.vars[continueMaskVar] = s.newValue1(ssa.OpSPMDSplat, boolType, s.constBool(false))
+	breakVal := s.variable(breakMaskVar, boolType)
+	s.spmdMask = s.newValue2(ssa.OpSPMDMaskAndNot, boolType, entryMask, breakVal)
+
+	// Execute body
+	s.stmtList(n.Body)
+
+	// Tear down
+	s.continueTo = prevContinue
+	s.breakTo = prevBreak
+	if lab != nil {
+		lab.continueTarget = nil
+		lab.breakTarget = nil
+	}
+
+	if b := s.endBlock(); b != nil {
+		b.AddEdgeTo(bIncr)
+	}
+
+	// Increment block
+	s.startBlock(bIncr)
+	if n.Post != nil {
+		s.stmt(n.Post)
+	}
+	if b := s.endBlock(); b != nil {
+		b.AddEdgeTo(bCond)
+		if b.Pos == src.NoXPos {
+			b.Pos = bCond.Pos
+		}
+	}
+
+	// End block: restore mask excluding broken lanes
+	s.startBlock(bEnd)
+	breakValEnd := s.variable(breakMaskVar, boolType)
+	s.spmdMask = s.newValue2(ssa.OpSPMDMaskAndNot, boolType, entryMask, breakValEnd)
 }

@@ -82,17 +82,14 @@ func testSwitchMaskPropagationSSA() {
 
 // Test for loop with continue mask propagation
 func testForLoopMaskPropagationSSA() {
-	// EXPECT SSA: OpPhi (for continue mask tracking)
-	// EXPECT SSA: OpOr (for accumulating continue conditions)
-	// EXPECT SSA: OpAndNot (for excluding continued lanes)
+	// EXPECT SSA: OpSPMDSplat (for initial false continue/break masks)
+	// EXPECT SSA: OpSPMDMaskAndNot (for active mask from break exclusion)
 	go for data := range 30 {
 		for i := 0; i < 10; i++ {
 			if i%2 == 0 {
-				// EXPECT SSA: continue mask updated
-				continue
+				continue // uniform - uses normal block jump
 			}
 
-			// EXPECT SSA: operations executed with !continue mask
 			var dt lanes.Varying[int32] = data + i*5
 			process(dt)
 		}
@@ -170,20 +167,17 @@ func maskedSPMDFunction(value lanes.Varying[int32]) lanes.Varying[int32] {
 
 // Test mask propagation with early exit conditions
 func testEarlyExitMaskPropagationSSA() {
-	// EXPECT SSA: OpAnd (for break condition mask)
-	// EXPECT SSA: OpOr (for accumulated exit mask)
+	// EXPECT SSA: OpSPMDMaskOr (for accumulating break mask)
+	// EXPECT SSA: OpSPMDMaskAndNot (for excluding broken lanes from active mask)
+	// EXPECT SSA: OpSPMDSplat (for initial false masks and zeroing)
 	var counter lanes.Varying[int32] = 0
 
 	go for counter := range 42 {
 		for i := 0; i < 20; i++ {
 			counter = counter + 1
-
-			// Varying break condition
 			if counter > 10 {
-				// EXPECT SSA: partial lane exit
 				break
 			}
-
 			process(counter)
 		}
 	}

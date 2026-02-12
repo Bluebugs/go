@@ -64,9 +64,9 @@ func testNestedControlFlowSSA() {
 
 // Test loop with continue generates mask updates
 func testGoForContinueSSA() {
-	// EXPECT SSA: OpPhi (for continue mask tracking)
-	// EXPECT SSA: OpOr (for accumulating continue conditions)
-	// EXPECT SSA: OpAndNot (for excluding continued lanes)
+	// EXPECT SSA: OpSPMDMaskOr (for accumulating continue mask)
+	// EXPECT SSA: OpSPMDMaskAndNot (for excluding continued lanes)
+	// EXPECT SSA: OpSPMDSplat (for initial false continue mask)
 	go for i := range 16 {
 		if i%3 == 0 {
 			continue
