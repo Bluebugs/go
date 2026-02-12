@@ -572,6 +572,11 @@ func (check *Checker) comparison(x, y *operand, op token.Token, switchCase bool)
 		check.updateExprType(y.expr, Default(y.typ()), true)
 	}
 
+	// Handle SPMD comparison types before setting standard boolean result
+	if check.handleSPMDComparison(x, y, op) {
+		return
+	}
+
 	// spec: "Comparison operators compare two operands and yield
 	//        an untyped boolean value."
 	x.typ_ = Typ[UntypedBool]
@@ -794,6 +799,12 @@ func (check *Checker) binary(x *operand, e ast.Expr, lhs, rhs ast.Expr, op token
 
 	if isShift(op) {
 		check.shift(x, &y, e, op)
+		return
+	}
+
+	// Handle SPMD binary expression type propagation before type matching
+	if check.handleSPMDBinaryExpr(x, &y, op) {
+		x.mode_ = value
 		return
 	}
 

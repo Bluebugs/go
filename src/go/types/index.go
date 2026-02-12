@@ -226,7 +226,11 @@ func (check *Checker) indexExpr(x *operand, e *indexedExpr) (isFuncInst bool) {
 		x.typ_ = Typ[Invalid]
 	}
 
-	check.index(index, length)
+	indexType, _ := check.index(index, length)
+
+	// Handle SPMD varying type propagation for indexing expressions
+	check.handleSPMDIndexing(x, indexType)
+
 	return false
 }
 
