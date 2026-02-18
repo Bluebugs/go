@@ -125,6 +125,15 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 	check.openScope(s, "range")
 	defer check.closeScope()
 
+	// Determine key/value types from range expression
+	var rKey, rVal Type
+	k, v, _, ok := rangeKeyVal(check, expr.typ(), func(ver goVersion) bool {
+		return check.allowVersion(ver)
+	})
+	if ok {
+		rKey, rVal = k, v
+	}
+
 	if s.Tok == token.DEFINE {
 		var vars []*Var
 		lhs := [2]ast.Expr{s.Key, s.Value}
@@ -147,9 +156,17 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 			}
 
 			if i == 0 && s.Key != nil {
-				obj.typ = NewVarying(Typ[Int])
+				if rKey != nil {
+					obj.typ = NewVarying(rKey)
+				} else {
+					obj.typ = NewVarying(Typ[Int])
+				}
 			} else if i == 1 && s.Value != nil {
-				obj.typ = NewVarying(expr.typ())
+				if rVal != nil {
+					obj.typ = NewVarying(rVal)
+				} else {
+					obj.typ = Typ[Invalid]
+				}
 			}
 			if obj.typ == nil {
 				obj.typ = Typ[Invalid]

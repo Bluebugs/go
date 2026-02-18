@@ -219,18 +219,27 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 	check.openScope(s.(*syntax.ForStmt), "range")
 	defer check.closeScope()
 
+	// Determine key/value types from range expression
+	var rKey, rVal Type
+	k, v, _, ok := rangeKeyVal(check, expr.typ(), func(ver goVersion) bool {
+		return check.allowVersion(ver)
+	})
+	if ok {
+		rKey, rVal = k, v
+	}
+
 	// Create SPMD-typed range variables following the regular rangeStmt pattern
 	// In SPMD context, range variables should be varying by default
 	if def {
 		// Short variable declaration (:=)
 		var vars []*Var
 		lhs := [2]syntax.Expr{sKey, sValue} // sKey, sValue may be nil
-		
+
 		for i, lhsExpr := range lhs {
 			if lhsExpr == nil {
 				continue
 			}
-			
+
 			// determine lhs variable
 			var obj *Var
 			if ident, _ := lhsExpr.(*syntax.Name); ident != nil {
@@ -247,14 +256,20 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 				obj = newVar(LocalVar, lhsExpr.Pos(), check.pkg, "_", nil) // dummy variable
 			}
 			assert(obj.typ == nil)
-			
+
 			// Set SPMD varying types for iteration variables
 			if i == 0 && sKey != nil {
-				// Key is varying int in SPMD range
-				obj.typ = NewVarying(Typ[Int])
+				if rKey != nil {
+					obj.typ = NewVarying(rKey)
+				} else {
+					obj.typ = NewVarying(Typ[Int])
+				}
 			} else if i == 1 && sValue != nil {
-				// Value is varying element type in SPMD range
-				obj.typ = NewVarying(expr.typ())
+				if rVal != nil {
+					obj.typ = NewVarying(rVal)
+				} else {
+					obj.typ = Typ[Invalid]
+				}
 			}
 			assert(obj.typ != nil)
 		}
