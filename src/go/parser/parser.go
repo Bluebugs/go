@@ -1347,7 +1347,18 @@ func (p *parser) parseTypeInstance(typ ast.Expr) ast.Expr {
 	p.exprLev++
 	var list []ast.Expr
 	for p.tok != token.RBRACK && p.tok != token.EOF {
-		list = append(list, p.parseType())
+		if len(list) > 0 && buildcfg.Experiment.SPMD {
+			// SPMD extension: for constrained types like lanes.Varying[T, N],
+			// subsequent arguments may be constant expressions (not types).
+			// Try type first, fall back to expression.
+			if t := p.tryIdentOrType(); t != nil {
+				list = append(list, t)
+			} else {
+				list = append(list, p.parseRhs())
+			}
+		} else {
+			list = append(list, p.parseType())
+		}
 		if !p.atComma("type argument list", token.RBRACK) {
 			break
 		}

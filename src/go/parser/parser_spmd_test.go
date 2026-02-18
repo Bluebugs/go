@@ -33,6 +33,15 @@ func firstFuncStmt(f *ast.File) ast.Stmt {
 	return nil
 }
 
+func firstGenDecl(f *ast.File) *ast.GenDecl {
+	for _, d := range f.Decls {
+		if gd, ok := d.(*ast.GenDecl); ok {
+			return gd
+		}
+	}
+	return nil
+}
+
 func TestSPMDParser(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -258,6 +267,193 @@ func TestSPMDParser(t *testing.T) {
 				}
 				if lit, ok := rs.Constraint.(*ast.BasicLit); !ok || lit.Value != "8" {
 					t.Errorf("expected Constraint = 8, got %v", rs.Constraint)
+				}
+			},
+		},
+		{
+			name: "constrained type var decl",
+			src:  "package p\nimport \"lanes\"\nvar x lanes.Varying[uint32, 2]",
+			spmd: true,
+			check: func(t *testing.T, f *ast.File) {
+				gd := firstGenDecl(f)
+				if gd == nil {
+					t.Fatal("expected GenDecl")
+				}
+				// Find the var decl (skip import)
+				var vd *ast.GenDecl
+				for _, d := range f.Decls {
+					if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.VAR {
+						vd = g
+						break
+					}
+				}
+				if vd == nil {
+					t.Fatal("expected var GenDecl")
+				}
+				vs := vd.Specs[0].(*ast.ValueSpec)
+				ile, ok := vs.Type.(*ast.IndexListExpr)
+				if !ok {
+					t.Fatalf("expected *ast.IndexListExpr, got %T", vs.Type)
+				}
+				if len(ile.Indices) != 2 {
+					t.Fatalf("expected 2 indices, got %d", len(ile.Indices))
+				}
+				// First index should be type ident "uint32"
+				if id, ok := ile.Indices[0].(*ast.Ident); !ok || id.Name != "uint32" {
+					t.Errorf("expected first index = uint32, got %v", ile.Indices[0])
+				}
+				// Second index should be integer literal "2"
+				if lit, ok := ile.Indices[1].(*ast.BasicLit); !ok || lit.Value != "2" {
+					t.Errorf("expected second index = 2, got %v", ile.Indices[1])
+				}
+			},
+		},
+		{
+			name: "constrained type int4",
+			src:  "package p\nimport \"lanes\"\nvar x lanes.Varying[int, 4]",
+			spmd: true,
+			check: func(t *testing.T, f *ast.File) {
+				var vd *ast.GenDecl
+				for _, d := range f.Decls {
+					if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.VAR {
+						vd = g
+						break
+					}
+				}
+				if vd == nil {
+					t.Fatal("expected var GenDecl")
+				}
+				vs := vd.Specs[0].(*ast.ValueSpec)
+				ile, ok := vs.Type.(*ast.IndexListExpr)
+				if !ok {
+					t.Fatalf("expected *ast.IndexListExpr, got %T", vs.Type)
+				}
+				if len(ile.Indices) != 2 {
+					t.Fatalf("expected 2 indices, got %d", len(ile.Indices))
+				}
+				if lit, ok := ile.Indices[1].(*ast.BasicLit); !ok || lit.Value != "4" {
+					t.Errorf("expected second index = 4, got %v", ile.Indices[1])
+				}
+			},
+		},
+		{
+			name: "constrained func param",
+			src:  "package p\nimport \"lanes\"\nfunc f(x lanes.Varying[float32, 8]) {}",
+			spmd: true,
+			check: func(t *testing.T, f *ast.File) {
+				var fn *ast.FuncDecl
+				for _, d := range f.Decls {
+					if fd, ok := d.(*ast.FuncDecl); ok {
+						fn = fd
+						break
+					}
+				}
+				if fn == nil {
+					t.Fatal("expected FuncDecl")
+				}
+				params := fn.Type.Params.List
+				if len(params) != 1 {
+					t.Fatalf("expected 1 param, got %d", len(params))
+				}
+				ile, ok := params[0].Type.(*ast.IndexListExpr)
+				if !ok {
+					t.Fatalf("expected *ast.IndexListExpr, got %T", params[0].Type)
+				}
+				if len(ile.Indices) != 2 {
+					t.Fatalf("expected 2 indices, got %d", len(ile.Indices))
+				}
+				if lit, ok := ile.Indices[1].(*ast.BasicLit); !ok || lit.Value != "8" {
+					t.Errorf("expected second index = 8, got %v", ile.Indices[1])
+				}
+			},
+		},
+		{
+			name: "constrained return type",
+			src:  "package p\nimport \"lanes\"\nvar x lanes.Varying[int32, 4]\nfunc f() lanes.Varying[int32, 4] { return x }",
+			spmd: true,
+			check: func(t *testing.T, f *ast.File) {
+				var fn *ast.FuncDecl
+				for _, d := range f.Decls {
+					if fd, ok := d.(*ast.FuncDecl); ok {
+						fn = fd
+						break
+					}
+				}
+				if fn == nil {
+					t.Fatal("expected FuncDecl")
+				}
+				results := fn.Type.Results.List
+				if len(results) != 1 {
+					t.Fatalf("expected 1 result, got %d", len(results))
+				}
+				ile, ok := results[0].Type.(*ast.IndexListExpr)
+				if !ok {
+					t.Fatalf("expected *ast.IndexListExpr, got %T", results[0].Type)
+				}
+				if len(ile.Indices) != 2 {
+					t.Fatalf("expected 2 indices, got %d", len(ile.Indices))
+				}
+				if lit, ok := ile.Indices[1].(*ast.BasicLit); !ok || lit.Value != "4" {
+					t.Errorf("expected second index = 4, got %v", ile.Indices[1])
+				}
+			},
+		},
+		{
+			name: "constrained type alias",
+			src:  "package p\nimport \"lanes\"\ntype V = lanes.Varying[uint16, 8]",
+			spmd: true,
+			check: func(t *testing.T, f *ast.File) {
+				var td *ast.GenDecl
+				for _, d := range f.Decls {
+					if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.TYPE {
+						td = g
+						break
+					}
+				}
+				if td == nil {
+					t.Fatal("expected type GenDecl")
+				}
+				ts := td.Specs[0].(*ast.TypeSpec)
+				ile, ok := ts.Type.(*ast.IndexListExpr)
+				if !ok {
+					t.Fatalf("expected *ast.IndexListExpr, got %T", ts.Type)
+				}
+				if len(ile.Indices) != 2 {
+					t.Fatalf("expected 2 indices, got %d", len(ile.Indices))
+				}
+				if lit, ok := ile.Indices[1].(*ast.BasicLit); !ok || lit.Value != "8" {
+					t.Errorf("expected second index = 8, got %v", ile.Indices[1])
+				}
+			},
+		},
+		{
+			name: "constrained byte16",
+			src:  "package p\nimport \"lanes\"\nvar x lanes.Varying[byte, 16]",
+			spmd: true,
+			check: func(t *testing.T, f *ast.File) {
+				var vd *ast.GenDecl
+				for _, d := range f.Decls {
+					if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.VAR {
+						vd = g
+						break
+					}
+				}
+				if vd == nil {
+					t.Fatal("expected var GenDecl")
+				}
+				vs := vd.Specs[0].(*ast.ValueSpec)
+				ile, ok := vs.Type.(*ast.IndexListExpr)
+				if !ok {
+					t.Fatalf("expected *ast.IndexListExpr, got %T", vs.Type)
+				}
+				if len(ile.Indices) != 2 {
+					t.Fatalf("expected 2 indices, got %d", len(ile.Indices))
+				}
+				if id, ok := ile.Indices[0].(*ast.Ident); !ok || id.Name != "byte" {
+					t.Errorf("expected first index = byte, got %v", ile.Indices[0])
+				}
+				if lit, ok := ile.Indices[1].(*ast.BasicLit); !ok || lit.Value != "16" {
+					t.Errorf("expected second index = 16, got %v", ile.Indices[1])
 				}
 			},
 		},
