@@ -219,13 +219,13 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 	check.openScope(s.(*syntax.ForStmt), "range")
 	defer check.closeScope()
 
-	// Determine key/value types from range expression
-	var rKey, rVal Type
-	k, v, _, ok := rangeKeyVal(check, expr.typ(), func(ver goVersion) bool {
+	// Determine value type from range expression (key is always int for SPMD)
+	var rVal Type
+	_, v, _, ok := rangeKeyVal(check, expr.typ(), func(ver goVersion) bool {
 		return check.allowVersion(ver)
 	})
 	if ok {
-		rKey, rVal = k, v
+		rVal = v
 	}
 
 	// Create SPMD-typed range variables following the regular rangeStmt pattern
@@ -259,11 +259,9 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 
 			// Set SPMD varying types for iteration variables
 			if i == 0 && sKey != nil {
-				if rKey != nil {
-					obj.typ = NewVarying(rKey)
-				} else {
-					obj.typ = NewVarying(Typ[Int])
-				}
+				// SPMD loop index is always a concrete int, even when
+				// rangeKeyVal returns an untyped integer for range-over-int.
+				obj.typ = NewVarying(Typ[Int])
 			} else if i == 1 && sValue != nil {
 				if rVal != nil {
 					obj.typ = NewVarying(rVal)
