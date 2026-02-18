@@ -157,6 +157,11 @@ func (check *Checker) validVarType(e ast.Expr, typ Type) {
 		return
 	}
 
+	// SPMD types are always valid as variable types.
+	if check.validVarTypeSPMD(e, typ) {
+		return
+	}
+
 	// We don't want to call typ.Underlying() or complete interfaces while we are in
 	// the middle of type-checking parameter declarations that might belong
 	// to interface methods. Delay this check to the end of type-checking.
