@@ -457,6 +457,91 @@ func TestSPMDParser(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "constrained type conversion",
+			src:  "package p\nimport \"lanes\"\nvar x lanes.Varying[uint32, 2]\nfunc f() { _ = lanes.Varying[uint16, 2](x) }",
+			spmd: true,
+			check: func(t *testing.T, f *ast.File) {
+				stmt := firstFuncStmt(f)
+				as, ok := stmt.(*ast.AssignStmt)
+				if !ok {
+					t.Fatalf("expected *ast.AssignStmt, got %T", stmt)
+				}
+				call, ok := as.Rhs[0].(*ast.CallExpr)
+				if !ok {
+					t.Fatalf("expected *ast.CallExpr, got %T", as.Rhs[0])
+				}
+				ile, ok := call.Fun.(*ast.IndexListExpr)
+				if !ok {
+					t.Fatalf("expected *ast.IndexListExpr, got %T", call.Fun)
+				}
+				if len(ile.Indices) != 2 {
+					t.Fatalf("expected 2 indices, got %d", len(ile.Indices))
+				}
+				if lit, ok := ile.Indices[1].(*ast.BasicLit); !ok || lit.Value != "2" {
+					t.Errorf("expected second index = 2, got %v", ile.Indices[1])
+				}
+			},
+		},
+		{
+			name: "constrained type switch case",
+			src:  "package p\nimport \"lanes\"\nfunc f(v any) { switch v.(type) { case lanes.Varying[int, 4]: } }",
+			spmd: true,
+			check: func(t *testing.T, f *ast.File) {
+				stmt := firstFuncStmt(f)
+				ts, ok := stmt.(*ast.TypeSwitchStmt)
+				if !ok {
+					t.Fatalf("expected *ast.TypeSwitchStmt, got %T", stmt)
+				}
+				body := ts.Body.List
+				if len(body) == 0 {
+					t.Fatal("expected at least one case clause")
+				}
+				cc, ok := body[0].(*ast.CaseClause)
+				if !ok {
+					t.Fatalf("expected *ast.CaseClause, got %T", body[0])
+				}
+				if len(cc.List) != 1 {
+					t.Fatalf("expected 1 case type, got %d", len(cc.List))
+				}
+				ile, ok := cc.List[0].(*ast.IndexListExpr)
+				if !ok {
+					t.Fatalf("expected *ast.IndexListExpr, got %T", cc.List[0])
+				}
+				if len(ile.Indices) != 2 {
+					t.Fatalf("expected 2 indices, got %d", len(ile.Indices))
+				}
+				if lit, ok := ile.Indices[1].(*ast.BasicLit); !ok || lit.Value != "4" {
+					t.Errorf("expected second index = 4, got %v", ile.Indices[1])
+				}
+			},
+		},
+		{
+			name: "constrained conversion assign",
+			src:  "package p\nimport \"lanes\"\nvar x int\nfunc f() { _ = lanes.Varying[int, 4](x) }",
+			spmd: true,
+			check: func(t *testing.T, f *ast.File) {
+				stmt := firstFuncStmt(f)
+				as, ok := stmt.(*ast.AssignStmt)
+				if !ok {
+					t.Fatalf("expected *ast.AssignStmt, got %T", stmt)
+				}
+				call, ok := as.Rhs[0].(*ast.CallExpr)
+				if !ok {
+					t.Fatalf("expected *ast.CallExpr, got %T", as.Rhs[0])
+				}
+				ile, ok := call.Fun.(*ast.IndexListExpr)
+				if !ok {
+					t.Fatalf("expected *ast.IndexListExpr, got %T", call.Fun)
+				}
+				if len(ile.Indices) != 2 {
+					t.Fatalf("expected 2 indices, got %d", len(ile.Indices))
+				}
+				if lit, ok := ile.Indices[1].(*ast.BasicLit); !ok || lit.Value != "4" {
+					t.Errorf("expected second index = 4, got %v", ile.Indices[1])
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {

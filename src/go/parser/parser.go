@@ -1598,7 +1598,18 @@ func (p *parser) parseIndexOrSliceOrInstance(x ast.Expr) ast.Expr {
 		for p.tok == token.COMMA {
 			p.next()
 			if p.tok != token.RBRACK && p.tok != token.EOF {
-				args = append(args, p.parseType())
+				if buildcfg.Experiment.SPMD {
+					// SPMD extension: for constrained types like lanes.Varying[T, N],
+					// subsequent arguments may be constant expressions (not types).
+					// Try type first, fall back to expression.
+					if t := p.tryIdentOrType(); t != nil {
+						args = append(args, t)
+					} else {
+						args = append(args, p.parseRhs())
+					}
+				} else {
+					args = append(args, p.parseType())
+				}
 			}
 		}
 	}
