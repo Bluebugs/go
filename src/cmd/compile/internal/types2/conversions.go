@@ -8,6 +8,7 @@ package types2
 
 import (
 	"go/constant"
+	"internal/buildcfg"
 	. "internal/types/errors"
 	"unicode"
 )
@@ -112,7 +113,6 @@ func (check *Checker) conversion(x *operand, T Type) {
 		x.invalidate()
 		return
 	}
-
 	// The conversion argument types are final. For untyped values the
 	// conversion provides the type, per the spec: "A constant may be
 	// given a type explicitly by a constant declaration or conversion,...".
@@ -157,6 +157,22 @@ func (x *operand) convertibleTo(check *Checker, T Type, cause *string) bool {
 	// "x is assignable to T"
 	if ok, _ := x.assignableTo(check, T, cause); ok {
 		return true
+	}
+
+	// SPMD types must use convertibleToSPMD exclusively.
+	// Do not apply standard Go conversion rules when both types are SPMD,
+	// as SPMDType.Underlying() unwraps to the element type, which would
+	// incorrectly allow upcasts (e.g., Varying[uint16] → Varying[uint32]).
+	if buildcfg.Experiment.SPMD {
+		_, vIsSPMD := x.typ().(*SPMDType)
+		_, tIsSPMD := T.(*SPMDType)
+		if vIsSPMD && tIsSPMD {
+			// Preserve the cause from convertibleToSPMD if it was set
+			if cause != nil && *cause == "" {
+				*cause = "SPMD to SPMD conversions must use convertibleToSPMD"
+			}
+			return false
+		}
 	}
 
 	origT := T

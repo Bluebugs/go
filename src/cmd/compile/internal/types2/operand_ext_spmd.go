@@ -79,6 +79,18 @@ func (x *operand) checkSPMDtoSPMDAssignability(vSPMD, tSPMD *SPMDType, cause *st
 		elementsCompatible := Identical(vSPMD.elem, tSPMD.elem) || x.convertibleToSPMDElement(vSPMD.elem, tSPMD.elem)
 
 		if elementsCompatible {
+			// Reject upcasting for varying types in assignments (same as in conversions)
+			if vSPMD.qualifier == VaryingQualifier && !Identical(vSPMD.elem, tSPMD.elem) {
+				srcSize := spmdBasicSize(vSPMD.elem)
+				dstSize := spmdBasicSize(tSPMD.elem)
+				if srcSize > 0 && dstSize > 0 && dstSize > srcSize {
+					if cause != nil {
+						*cause = "cannot assign varying type to larger element type (would exceed SIMD register capacity)"
+					}
+					return false
+				}
+			}
+
 			// Rule 2a: Constraint compatibility rules
 			if vSPMD.qualifier == VaryingQualifier {
 				// ALLOWED: Constrained varying can be assigned to universal varying[] (varying[4] -> varying[])
@@ -215,8 +227,19 @@ func (x *operand) convertibleToSPMD(check *Checker, T Type, cause *string) bool 
 	// Rule 1: Same qualifier and convertible element types
 	if vSPMD.qualifier == tSPMD.qualifier {
 		if x.isElementConvertible(vSPMD.elem, tSPMD.elem) {
-			// For conversions, we allow different constraints as long as element types are convertible
-			// Examples: varying[8] int32 -> varying[64] int16 (allowed in conversions)
+			// Reject upcasting for varying types: converting to a larger element type
+			// would require more SIMD register bits (e.g., Varying[uint16] has 8 lanes
+			// on 128-bit SIMD, but Varying[uint32] only has 4 lanes).
+			if vSPMD.qualifier == VaryingQualifier {
+				srcSize := spmdBasicSize(vSPMD.elem)
+				dstSize := spmdBasicSize(tSPMD.elem)
+				if srcSize > 0 && dstSize > 0 && dstSize > srcSize {
+					if cause != nil {
+						*cause = "cannot upcast varying type to larger element type (would exceed SIMD register capacity)"
+					}
+					return false
+				}
+			}
 			return true
 		}
 	}
@@ -283,6 +306,29 @@ func (x *operand) convertibleToSPMDElement(sourceElem, targetElem Type) bool {
 	// Use Go's standard type convertibility rules
 	// This includes numeric conversions, string conversions, etc.
 	return ConvertibleTo(sourceElem, targetElem)
+}
+
+// spmdBasicSize returns the byte size of a numeric basic type for SPMD upcasting checks.
+// Returns 0 for non-numeric or platform-dependent types (int, uint, uintptr).
+func spmdBasicSize(t Type) int64 {
+	b, ok := t.Underlying().(*Basic)
+	if !ok {
+		return 0
+	}
+	switch b.kind {
+	case Int8, Uint8:
+		return 1
+	case Int16, Uint16:
+		return 2
+	case Int32, Uint32, Float32:
+		return 4
+	case Int64, Uint64, Float64:
+		return 8
+	default:
+		// Platform-dependent types (int, uint, uintptr) and non-numeric:
+		// skip the upcast check to avoid false positives.
+		return 0
+	}
 }
 
 // checkPointerToSPMDAssignability checks if V can be assigned to T where T is a pointer to an SPMD type
