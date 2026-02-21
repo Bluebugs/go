@@ -154,6 +154,39 @@ func shiftRightBuiltin[T integer](value Varying[T], shift Varying[T]) Varying[T]
 	panic("lanes.shiftRightBuiltin is a compiler builtin and should be replaced during compilation")
 }
 
+// RotateWithin rotates values within independent groups of groupSize lanes.
+// Groups: lanes [0..groupSize-1], [groupSize..2*groupSize-1], etc.
+// groupSize must be a compile-time constant that evenly divides the lane count.
+//
+//go:noinline
+func RotateWithin[T any](v Varying[T], offset int, groupSize int) Varying[T] {
+	panic("lanes.RotateWithin is a compiler builtin and should be replaced during compilation")
+}
+
+// ShiftLeftWithin shifts values left within independent groups, filling with zero.
+// groupSize must be a compile-time constant that evenly divides the lane count.
+//
+//go:noinline
+func ShiftLeftWithin[T any](v Varying[T], amount int, groupSize int) Varying[T] {
+	panic("lanes.ShiftLeftWithin is a compiler builtin and should be replaced during compilation")
+}
+
+// ShiftRightWithin shifts values right within independent groups, filling with zero.
+// groupSize must be a compile-time constant that evenly divides the lane count.
+//
+//go:noinline
+func ShiftRightWithin[T any](v Varying[T], amount int, groupSize int) Varying[T] {
+	panic("lanes.ShiftRightWithin is a compiler builtin and should be replaced during compilation")
+}
+
+// SwizzleWithin permutes values within independent groups using indices.
+// groupSize must be a compile-time constant that evenly divides the lane count.
+//
+//go:noinline
+func SwizzleWithin[T any](v Varying[T], indices Varying[int], groupSize int) Varying[T] {
+	panic("lanes.SwizzleWithin is a compiler builtin and should be replaced during compilation")
+}
+
 // Type constraints for generic functions
 type integer interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
