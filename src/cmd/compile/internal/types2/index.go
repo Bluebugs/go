@@ -9,6 +9,7 @@ package types2
 import (
 	"cmd/compile/internal/syntax"
 	"go/constant"
+	"internal/buildcfg"
 	. "internal/types/errors"
 )
 
@@ -64,6 +65,16 @@ func (check *Checker) indexExpr(x *operand, e *syntax.IndexExpr) (isFuncInst boo
 		// Lastly, if x.typ is a map type, indexing must produce a value of a complete type, meaning
 		// its element type must also be complete.
 		if !check.isComplete(typ.elem) {
+			x.invalidate()
+			return false
+		}
+	}
+
+	// SPMD: Reject indexing on varying types with clear error
+	if buildcfg.Experiment.SPMD {
+		if _, ok := x.typ().(*SPMDType); ok {
+			check.errorf(e.Pos(), NonIndexableOperand, "cannot index %s (varying types are not indexable; use reduce.From to extract elements)", x)
+			check.use(e.Index)
 			x.invalidate()
 			return false
 		}
