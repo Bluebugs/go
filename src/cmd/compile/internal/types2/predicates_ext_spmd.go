@@ -18,9 +18,8 @@ func (c *comparer) handleSPMDTypeIdentical(x, y Type, p *ifacePair) (handled, id
 
 	if spmdX, ok := x.(*SPMDType); ok {
 		if spmdY, ok := y.(*SPMDType); ok {
-			// Two SPMD types are identical if they have the same qualifier, constraint, and element type
+			// Two SPMD types are identical if they have the same qualifier and element type
 			return true, (spmdX.qualifier == spmdY.qualifier &&
-				spmdX.constraint == spmdY.constraint &&
 				c.identical(spmdX.elem, spmdY.elem, p))
 		}
 		// One is SPMD, the other isn't - they're not identical

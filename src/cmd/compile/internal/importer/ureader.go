@@ -320,17 +320,15 @@ func (r *reader) unionType() *types2.Union {
 
 func (r *reader) spmdType() types2.Type {
 	isVarying := r.Bool()
-	var constraint int64 = -1
 	if isVarying {
-		constraint = r.Int64()
+		r.Int64() // constraint (no longer used, kept for format compatibility)
 	}
 	elem := r.typ()
-	
 	if isVarying {
-		return types2.NewVaryingConstrained(elem, constraint)
-	} else {
-		return types2.NewUniform(elem)
+		return types2.NewVarying(elem)
 	}
+	// Uniform is represented as a regular Go type, not as SPMDType.
+	return elem
 }
 
 func (r *reader) interfaceType() *types2.Interface {

@@ -443,7 +443,6 @@ type (
 		Lhs Expr // nil means no Lhs = or Lhs :=
 		Def bool // means :=
 		X   Expr // range X
-		Constraint Expr // constraint for SPMD "range[n]" - nil means no constraint
 		simpleStmt
 	}
 

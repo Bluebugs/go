@@ -578,7 +578,7 @@ func (pw *pkgWriter) typIdx(typ types2.Type, dict *writerDict) typeInfo {
 		w.Code(pkgbits.TypeSPMD)
 		w.Bool(typ.IsVarying()) // varying vs uniform
 		if typ.IsVarying() {
-			w.Int64(typ.Constraint()) // constraint value
+			w.Int64(-1) // constraint (always -1 - unconstrained; kept for format compatibility)
 		}
 		w.typ(typ.Elem()) // element type
 

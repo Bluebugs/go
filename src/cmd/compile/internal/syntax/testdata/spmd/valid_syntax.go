@@ -13,19 +13,10 @@ import (
 func validDeclarations() {
 	var a int = 42
 	var b lanes.Varying[float32]
-	var c lanes.Varying[int, 4]
-	var d lanes.Varying[byte, 0]
 	var e []lanes.Varying[int]
-	var f []lanes.Varying[float64, 8]
-	var g []lanes.Varying[byte, 0]
 
-	// Valid function parameter types
-	func localFunc(x int, y lanes.Varying[float32]) lanes.Varying[int] {
-		return y
-	}
-
-	_ = localFunc
-	_, _, _, _, _, _, _ = a, b, c, d, e, f, g
+	_ = a
+	_, _, _ = a, b, e
 }
 
 // Valid go for loop syntax
@@ -41,24 +32,10 @@ func validGoFor() {
 		process(value)
 	}
 
-	// go for with constrained range
-	go for i := range[4] 16 {
-		process(i)
-	}
-
 	// Infinite go for loop
 	go for {
 		process(0) // infinite loop
 	}
-}
-
-// Valid constrained varying types
-func validConstraints() {
-	var a lanes.Varying[int, 4]
-	var b lanes.Varying[float32, 4]
-	var c lanes.Varying[byte, 0] // universal constraint
-
-	_, _, _ = a, b, c
 }
 
 // Valid built-in function usage

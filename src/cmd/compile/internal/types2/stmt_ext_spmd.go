@@ -153,7 +153,7 @@ func (check *Checker) spmdForStmt(s *syntax.ForStmt, ctxt stmtContext) {
 			}
 		}
 		// Use SPMD-specific range statement handling
-		check.spmdRangeStmt(inner, s, s, sKey, sValue, sExtra, rclause.X, rclause.Def, rclause.Constraint)
+		check.spmdRangeStmt(inner, s, s, sKey, sValue, sExtra, rclause.X, rclause.Def)
 		return // Don't process body again
 	} else {
 		// Process the SPMD loop body with regular for scope
@@ -192,27 +192,16 @@ func (check *Checker) spmdForStmt(s *syntax.ForStmt, ctxt stmtContext) {
 	}
 }
 
-// spmdRangeStmt type-checks SPMD range statements with constraint support
-func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt, sKey, sValue, sExtra, x syntax.Expr, def bool, constraint syntax.Expr) {
+// spmdRangeStmt type-checks SPMD range statements
+func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt, sKey, sValue, sExtra, x syntax.Expr, def bool) {
 	// For Phase 1.4, handle SPMD range clauses similarly to regular range clauses
 	// but with SPMD-specific variable typing
-	
+
 	// Type-check the range expression
 	var expr operand
 	check.expr(nil, &expr, x)
 	if expr.mode() == invalid {
 		return
-	}
-	
-	// Handle constraint if present (for varying[n] syntax)
-	if constraint != nil {
-		var constraintOp operand
-		check.expr(nil, &constraintOp, constraint)
-		if constraintOp.mode() != constant_ {
-			check.error(constraint, InvalidConstVal, "constraint must be a constant")
-			return
-		}
-		// TODO: Validate constraint value and use it for SPMD code generation
 	}
 
 	// Open scope for SPMD range variables (following regular range pattern)
@@ -591,11 +580,3 @@ func (check *Checker) initSPMDInfo() {
 	// This would typically be added to the Checker struct
 }
 
-// isSPMDUniversalConstrained reports whether t is a universal constrained
-// varying type (Varying[T, 0]) which supports type switches.
-func (check *Checker) isSPMDUniversalConstrained(t Type) bool {
-	if spmd, ok := t.(*SPMDType); ok {
-		return spmd.IsVarying() && spmd.IsUniversalConstrained()
-	}
-	return false
-}

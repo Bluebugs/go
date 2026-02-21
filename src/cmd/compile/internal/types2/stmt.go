@@ -9,7 +9,6 @@ package types2
 import (
 	"cmd/compile/internal/syntax"
 	"go/constant"
-	"internal/buildcfg"
 	. "internal/types/errors"
 	"slices"
 )
@@ -810,8 +809,6 @@ func (check *Checker) typeSwitchStmt(inner stmtContext, s *syntax.SwitchStmt, gu
 			if isTypeParam(x.typ()) {
 				check.errorf(&x, InvalidTypeSwitch, "cannot use type switch on type parameter value %s", &x)
 			} else if IsInterface(x.typ()) {
-				sx = &x
-			} else if buildcfg.Experiment.SPMD && check.isSPMDUniversalConstrained(x.typ()) {
 				sx = &x
 			} else {
 				check.errorf(&x, InvalidTypeSwitch, "%s is not an interface", &x)

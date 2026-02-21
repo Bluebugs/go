@@ -6,10 +6,7 @@
 
 package types2
 
-import (
-	"internal/buildcfg"
-	"strconv"
-)
+import "internal/buildcfg"
 
 // handleSPMDTypeString handles SPMD types in the typeWriter.typ method.
 // Returns true if the type was handled, false if it should fall through to default.
@@ -26,16 +23,6 @@ func (w *typeWriter) handleSPMDTypeString(typ Type) bool {
 		case VaryingQualifier:
 			w.string("lanes.Varying[")
 			w.typ(t.elem)
-			if t.IsConstrained() {
-				w.string(", ")
-				if t.IsUniversalConstrained() {
-					// lanes.Varying[T, 0] - universal constraint
-					w.byte('0')
-				} else {
-					// lanes.Varying[T, N] - numeric constraint
-					w.string(strconv.FormatInt(t.constraint, 10))
-				}
-			}
 			w.byte(']')
 		}
 		return true

@@ -523,13 +523,12 @@ func (r *reader) doTyp() *types.Type {
 
 	case pkgbits.TypeSPMD:
 		isVarying := r.Bool()
-		var constraint int64 = -1
 		if isVarying {
-			constraint = r.Int64()
+			r.Int64() // constraint (no longer used, kept for format compatibility)
 		}
 		elem := r.typ()
 		if isVarying {
-			return types.NewSPMD(elem, constraint)
+			return types.NewSPMD(elem, -1)
 		}
 		return elem
 	case pkgbits.TypeStruct:

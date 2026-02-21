@@ -92,14 +92,8 @@ func (check *Checker) validateSPMDFunctionSignature(fdecl *syntax.FuncDecl, sig 
 	// Note: Return statement validation is handled in stmt.go during return statement processing
 }
 
-// SIMD register capacity validation constants
-const (
-	// SIMD128 capacity: 128 bits = 16 bytes
-	simd128CapacityBytes = 16
-
-	// Constrained varying capacity limit: 512 bits = 64 bytes
-	constrainedVaryingCapacityBytes = 64
-)
+// SIMD128 capacity: 128 bits = 16 bytes
+const simd128CapacityBytes = 16
 
 // laneCountForType returns the SIMD128 lane count for a given element type.
 // Formula: 16 bytes (128 bits) / sizeof(T) = simd128CapacityBytes / elemSize
@@ -118,18 +112,6 @@ func (check *Checker) laneCountForType(elem Type) int64 {
 // calculateVaryingTypeCapacity calculates the SIMD capacity needed for a varying type
 func (check *Checker) calculateVaryingTypeCapacity(spmdType *SPMDType) int64 {
 	elementSize := check.getTypeSize(spmdType.elem)
-
-	// For constrained varying, multiply by constraint
-	if spmdType.IsConstrained() {
-		constraintValue := spmdType.Constraint()
-		if constraintValue == 0 {
-			// Universal constraint ([]) - use laneCountForType
-			return elementSize * check.laneCountForType(spmdType.elem)
-		}
-		return elementSize * constraintValue
-	}
-
-	// For unconstrained varying, capacity is always simd128CapacityBytes (16 bytes)
 	return elementSize * check.laneCountForType(spmdType.elem)
 }
 
@@ -161,7 +143,7 @@ func (check *Checker) computeFunctionLaneCount(sig *Signature) int64 {
 	maxElemSize := int64(0)
 	found := false
 	for _, param := range sig.params.vars {
-		if spmdType, ok := param.typ.(*SPMDType); ok && spmdType.IsVarying() && !spmdType.IsConstrained() {
+		if spmdType, ok := param.typ.(*SPMDType); ok && spmdType.IsVarying() {
 			elemSize := check.getTypeSize(spmdType.elem)
 			if elemSize > maxElemSize {
 				maxElemSize = elemSize

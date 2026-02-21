@@ -68,7 +68,6 @@ func (x *operand) handleSPMDAssignability(V, T Type, cause *string) (handled, as
 func (x *operand) checkSPMDtoSPMDAssignability(vSPMD, tSPMD *SPMDType, cause *string) bool {
 	// Rule 1: Identical SPMD types are always assignable
 	if vSPMD.qualifier == tSPMD.qualifier &&
-		vSPMD.constraint == tSPMD.constraint &&
 		Identical(vSPMD.elem, tSPMD.elem) {
 		return true
 	}
@@ -90,30 +89,7 @@ func (x *operand) checkSPMDtoSPMDAssignability(vSPMD, tSPMD *SPMDType, cause *st
 					return false
 				}
 			}
-
-			// Rule 2a: Constraint compatibility rules
-			if vSPMD.qualifier == VaryingQualifier {
-				// ALLOWED: Constrained varying can be assigned to universal varying[] (varying[4] -> varying[])
-				if vSPMD.constraint > 0 && tSPMD.constraint == 0 {
-					return true // varying[4] can be assigned to varying[]
-				}
-
-				// ALLOWED: Unconstrained varying can be assigned to any constrained varying (broadcast)
-				if vSPMD.constraint == -1 && tSPMD.constraint >= 0 {
-					return true // varying can be assigned to varying[4] or varying[]
-				}
-
-				// ALLOWED: Constrained varying to unconstrained varying (varying[4] -> varying)
-				// The TinyGo backend handles width mismatch via spmdResizeVector().
-				if vSPMD.constraint > 0 && tSPMD.constraint == -1 {
-					return true
-				}
-			}
-
-			// Rule 2b: Same constraint or no constraint
-			if vSPMD.constraint == tSPMD.constraint {
-				return true
-			}
+			return true
 		}
 	}
 
@@ -206,7 +182,7 @@ func (x *operand) checkRegularToSPMDAssignability(V Type, tSPMD *SPMDType, cause
 
 // convertibleToSPMD checks if x can be converted to T via SPMD-specific conversion rules.
 // This is more permissive than assignability and allows conversions between different
-// constrained varying types with compatible element types.
+// varying types with compatible element types.
 func (x *operand) convertibleToSPMD(check *Checker, T Type, cause *string) bool {
 	if !buildcfg.Experiment.SPMD {
 		return false
@@ -216,19 +192,7 @@ func (x *operand) convertibleToSPMD(check *Checker, T Type, cause *string) bool 
 	vSPMD, vIsSPMD := V.(*SPMDType)
 	tSPMD, tIsSPMD := T.(*SPMDType)
 
-	// Array-to-constrained-varying: [N]T → Varying[T, N]
-	if !vIsSPMD && tIsSPMD {
-		if tSPMD.IsVarying() && tSPMD.constraint > 0 {
-			if arr, ok := V.Underlying().(*Array); ok {
-				if arr.Len() == tSPMD.constraint && Identical(arr.Elem(), tSPMD.elem) {
-					return true
-				}
-			}
-		}
-		return false
-	}
-
-	// Only handle SPMD to SPMD conversions beyond this point
+	// Only handle SPMD to SPMD conversions
 	if !vIsSPMD || !tIsSPMD {
 		return false
 	}

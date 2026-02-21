@@ -66,11 +66,9 @@ func testLanesIndexRestrictions() {
 func testVaryingParameterTypes(
 	a lanes.Varying[int],          // OK
 	b lanes.Varying[float32],      // OK
-	c lanes.Varying[int, 4],       // OK: constrained varying
-	d lanes.Varying[byte, 0],      // OK: universal constraint
 ) lanes.Varying[int] {
-	_ = d
-	return a + c
+	_ = b
+	return a
 }
 
 func testInvalidMapKeys() {
@@ -100,15 +98,6 @@ func testVaryingInterface() {
 	default:
 		// no handling
 	}
-}
-
-// Test constrained varying validation
-func testConstrainedVarying() {
-	var a lanes.Varying[int, 4]         // OK: compile-time constant
-
-	var c lanes.Varying[int, -1] // ERROR "lanes.Varying constraint must be non-negative"
-
-	_, _ = a, c
 }
 
 // Helper function

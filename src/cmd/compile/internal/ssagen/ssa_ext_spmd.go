@@ -606,7 +606,7 @@ func (s *state) spmdLanesBuiltin(n *ir.CallExpr, fn string) *ssa.Value {
 		args := s.intrinsicArgs(n)
 		return s.newValue2(ssa.OpSPMDSwizzle, n.Type(), args[0], args[1])
 	}
-	// Unrecognized (From, FromConstrained, ToConstrained) - fall through to normal call
+	// Unrecognized (From) - fall through to normal call
 	return nil
 }
 

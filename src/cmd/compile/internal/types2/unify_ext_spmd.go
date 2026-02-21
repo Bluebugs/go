@@ -31,19 +31,9 @@ func (u *unifier) handleSPMDUnification(x, y Type, mode unifyMode) (handled bool
 	if xIsSPMD && yIsSPMD {
 		// SPMD types unify if:
 		// 1. Same qualifier (uniform/varying)
-		// 2. Same constraint (if varying)
-		// 3. Element types unify
+		// 2. Element types unify
 		if xSPMD.qualifier != ySPMD.qualifier {
 			return true, false // Different qualifiers don't unify
-		}
-
-		if xSPMD.qualifier == VaryingQualifier && xSPMD.constraint != ySPMD.constraint {
-			// Two different specific constraints (e.g. 4 vs 8) are incompatible.
-			if xSPMD.constraint > 0 && ySPMD.constraint > 0 {
-				return true, false
-			}
-			// Allow when one side is unconstrained (-1) or universal (0).
-			// This enables generic builtins to accept constrained arguments.
 		}
 
 		// Recursively unify element types

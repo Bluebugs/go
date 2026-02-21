@@ -5,7 +5,6 @@
 package types2
 
 // SPMDQualifier represents the SPMD type qualifier (uniform or varying).
-// Kept for backward compatibility during migration - will be removed after Phase 4.
 type SPMDQualifier uint8
 
 const (
@@ -13,31 +12,16 @@ const (
 	VaryingQualifier
 )
 
-// SPMDType represents a varying qualified type (lanes.Varying[T] or lanes.Varying[T, N]).
+// SPMDType represents a varying qualified type (lanes.Varying[T]).
 // Since uniform is now implicit (regular Go types are uniform), SPMDType always means varying.
-// The qualifier field is kept during migration but should always be VaryingQualifier for new code.
 type SPMDType struct {
-	qualifier  SPMDQualifier // kept for bridge phase, always VaryingQualifier for new code
-	constraint int64         // -1 for no constraint, 0 for universal ([]), >0 for numeric constraint
-	elem       Type
-}
-
-// NewUniform returns a new uniform type for the given element type.
-// Deprecated: uniform is now implicit. Use the element type directly.
-// Kept during bridge phase for old keyword-based code path.
-func NewUniform(elem Type) *SPMDType {
-	return &SPMDType{qualifier: UniformQualifier, constraint: -1, elem: elem}
+	qualifier SPMDQualifier
+	elem      Type
 }
 
 // NewVarying returns a new varying type for the given element type.
 func NewVarying(elem Type) *SPMDType {
-	return &SPMDType{qualifier: VaryingQualifier, constraint: -1, elem: elem}
-}
-
-// NewVaryingConstrained returns a new constrained varying type for the given element type and constraint.
-// constraint: -1 for no constraint, 0 for universal ([]), >0 for numeric constraint
-func NewVaryingConstrained(elem Type, constraint int64) *SPMDType {
-	return &SPMDType{qualifier: VaryingQualifier, constraint: constraint, elem: elem}
+	return &SPMDType{qualifier: VaryingQualifier, elem: elem}
 }
 
 // Qualifier returns the SPMD qualifier (uniform or varying).
@@ -48,16 +32,6 @@ func (s *SPMDType) IsUniform() bool { return s.qualifier == UniformQualifier }
 
 // IsVarying reports whether the type is varying.
 func (s *SPMDType) IsVarying() bool { return s.qualifier == VaryingQualifier }
-
-// Constraint returns the varying constraint.
-// -1 for no constraint, 0 for universal ([]), >0 for numeric constraint.
-func (s *SPMDType) Constraint() int64 { return s.constraint }
-
-// IsConstrained reports whether the varying type has a constraint.
-func (s *SPMDType) IsConstrained() bool { return s.constraint >= 0 }
-
-// IsUniversalConstrained reports whether the varying type has a universal constraint ([]).
-func (s *SPMDType) IsUniversalConstrained() bool { return s.constraint == 0 }
 
 // Elem returns the element type of the SPMD type.
 func (s *SPMDType) Elem() Type { return s.elem }
@@ -71,16 +45,6 @@ func (s *SPMDType) String() string { return TypeString(s, nil) }
 
 // ----------------------------------------------------------------------------
 // Type compatibility and conversion utilities for SPMD types
-
-// IsUniformType reports whether t is a uniform type.
-// Deprecated: With package-based types, uniform is implicit. This always returns false
-// for new code paths since UniformQualifier is only created by old keyword-based path.
-func IsUniformType(t Type) bool {
-	if s, ok := t.(*SPMDType); ok {
-		return s.IsUniform()
-	}
-	return false
-}
 
 // IsVaryingType reports whether t is a varying type.
 func IsVaryingType(t Type) bool {

@@ -2262,51 +2262,23 @@ func (p *parser) newRangeClause(lhs Expr, def bool) *RangeClause {
 	return r
 }
 
-// newSpmdRangeClause creates a range clause with SPMD constraint support
+// newSpmdRangeClause creates a range clause for SPMD loops
 func (p *parser) newSpmdRangeClause(lhs Expr, def bool) *RangeClause {
 	r := new(RangeClause)
 	r.pos = p.pos()
 	p.next() // consume _Range
 	r.Lhs = lhs
 	r.Def = def
-	
-	// Check for constraint: range[n] expr
-	if p.got(_Lbrack) {
-		if p.got(_Rbrack) {
-			// range[] expr - universal constraint (empty brackets)
-			// Leave r.Constraint as nil to represent universal constraint
-		} else {
-			// range[n] expr - numeric constraint
-			r.Constraint = p.expr()
-			p.want(_Rbrack)
-		}
-	}
-	
 	r.X = p.expr()
 	return r
 }
 
-// spmdRangeClause parses SPMD range clauses with optional constraints: range[n] expr
+// spmdRangeClause parses SPMD range clauses: range expr
 // Only available when GOEXPERIMENT=spmd is enabled
 func (p *parser) spmdRangeClause() *RangeClause {
 	r := new(RangeClause)
 	r.pos = p.pos()
-	
 	p.next() // consume _Range
-	
-	// Check for constraint: range[n] expr
-	if p.got(_Lbrack) {
-		if p.got(_Rbrack) {
-			// range[] expr - universal constraint (empty brackets)
-			// Leave r.Constraint as nil to represent universal constraint
-		} else {
-			// range[n] expr - numeric constraint
-			r.Constraint = p.expr()
-			p.want(_Rbrack)
-		}
-	}
-	
-	// Parse the range expression
 	r.X = p.expr()
 	return r
 }
@@ -2498,7 +2470,7 @@ func (p *parser) forStmt() Stmt {
 	return s
 }
 
-// spmdForStmt parses SPMD "go for" loops: go for range[constraint] expr, go for range expr, etc.
+// spmdForStmt parses SPMD "go for" loops: go for range expr, etc.
 // Only available when GOEXPERIMENT=spmd is enabled
 func (p *parser) spmdForStmt(goPos Pos) Stmt {
 	if trace {
@@ -2619,7 +2591,7 @@ done:
 	return
 }
 
-// spmdHeader parses SPMD for loop headers, handling constrained range syntax: range[n] expr
+// spmdHeader parses SPMD for loop headers: range expr
 // Only available when GOEXPERIMENT=spmd is enabled
 func (p *parser) spmdHeader(keyword token) (init SimpleStmt, cond Expr, post SimpleStmt) {
 	p.want(keyword)
@@ -2633,7 +2605,7 @@ func (p *parser) spmdHeader(keyword token) (init SimpleStmt, cond Expr, post Sim
 	p.xnest = -1
 
 	if p.tok != _Semi {
-		// Check for SPMD range clause with optional constraint: range[n] expr
+		// Check for SPMD range clause: range expr
 		if p.tok == _Range {
 			init = p.spmdRangeClause()
 			p.xnest = outer
@@ -3122,16 +3094,6 @@ func (p *parser) typeList(strict bool) (x Expr, comma bool) {
 			}
 			l := new(ListExpr)
 			l.pos = x.Pos() // == list[0].Pos()
-			l.ElemList = list
-			x = l
-		} else if buildcfg.Experiment.SPMD && p.tok != _Rbrack {
-			// SPMD extension: allow constant expressions as second type argument
-			// for lanes.Varying[T, N] syntax where N is a numeric constant.
-			// The type checker validates this is only used with lanes.Varying.
-			t := p.expr()
-			list := []Expr{x, t}
-			l := new(ListExpr)
-			l.pos = x.Pos()
 			l.ElemList = list
 			x = l
 		}
