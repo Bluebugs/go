@@ -219,7 +219,19 @@ func (x *operand) convertibleToSPMD(check *Checker, T Type, cause *string) bool 
 	vSPMD, vIsSPMD := V.(*SPMDType)
 	tSPMD, tIsSPMD := T.(*SPMDType)
 
-	// Only handle SPMD to SPMD conversions
+	// Array-to-constrained-varying: [N]T → Varying[T, N]
+	if !vIsSPMD && tIsSPMD {
+		if tSPMD.IsVarying() && tSPMD.constraint > 0 {
+			if arr, ok := V.Underlying().(*Array); ok {
+				if arr.Len() == tSPMD.constraint && Identical(arr.Elem(), tSPMD.elem) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	// Only handle SPMD to SPMD conversions beyond this point
 	if !vIsSPMD || !tIsSPMD {
 		return false
 	}
