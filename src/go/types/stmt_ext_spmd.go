@@ -280,6 +280,15 @@ func (check *Checker) checkNoGoForInSPMDFunction(body *ast.BlockStmt) {
 	})
 }
 
+// isSPMDUniversalConstrained reports whether t is a universal constrained
+// varying type (Varying[T, 0]) which supports type switches.
+func (check *Checker) isSPMDUniversalConstrained(t Type) bool {
+	if spmd, ok := t.(*SPMDType); ok {
+		return spmd.IsVarying() && spmd.IsUniversalConstrained()
+	}
+	return false
+}
+
 func (check *Checker) spmdSwitchStmt(s *ast.SwitchStmt, ctxt stmtContext) {
 	inner := ctxt | breakOk
 	check.openScope(s, "switch")

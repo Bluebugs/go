@@ -590,3 +590,12 @@ func (check *Checker) initSPMDInfo() {
 	// Initialize spmdInfo field if it doesn't exist
 	// This would typically be added to the Checker struct
 }
+
+// isSPMDUniversalConstrained reports whether t is a universal constrained
+// varying type (Varying[T, 0]) which supports type switches.
+func (check *Checker) isSPMDUniversalConstrained(t Type) bool {
+	if spmd, ok := t.(*SPMDType); ok {
+		return spmd.IsVarying() && spmd.IsUniversalConstrained()
+	}
+	return false
+}

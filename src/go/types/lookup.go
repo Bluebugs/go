@@ -9,7 +9,10 @@
 
 package types
 
-import "bytes"
+import (
+	"bytes"
+	"internal/buildcfg"
+)
 
 // LookupSelection selects the field or method whose ID is Id(pkg,
 // name), on a value of type T. If addressable is set, T is the type
@@ -592,6 +595,34 @@ func (check *Checker) assertableTo(V, T Type, cause *string) bool {
 	//        dynamic type of x implements the interface T."
 	if IsInterface(T) {
 		return true
+	}
+	// SPMD: Varying[T, 0] can assert to Varying[T, N] with matching elem and N > 0
+	if buildcfg.Experiment.SPMD {
+		if vSPMD, ok := V.(*SPMDType); ok && vSPMD.IsUniversalConstrained() {
+			if tSPMD, ok := T.(*SPMDType); ok && tSPMD.IsVarying() {
+				if tSPMD.Constraint() > 0 {
+					// Valid constrained case: check element type
+					if Identical(vSPMD.Elem(), tSPMD.Elem()) {
+						return true
+					}
+					if cause != nil {
+						*cause = check.sprintf("element type mismatch: %s vs %s", vSPMD.Elem(), tSPMD.Elem())
+					}
+					return false
+				}
+				// Unconstrained case (constraint == -1) or zero constraint case
+				// This is not allowed - set cause and return false
+				if cause != nil {
+					*cause = check.sprintf("type switch on %s requires cases of Varying[%s, N] with N > 0", V, vSPMD.Elem())
+				}
+				return false
+			}
+			// Non-SPMD type case: not assertable from universal constrained
+			if cause != nil {
+				*cause = check.sprintf("type switch on %s requires cases of Varying[%s, N] with N > 0", V, vSPMD.Elem())
+			}
+			return false
+		}
 	}
 	// TODO(gri) fix this for generalized interfaces
 	return check.hasAllMethods(T, V, false, Identical, cause)
