@@ -113,15 +113,6 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 		return
 	}
 
-	if s.Constraint != nil {
-		var constraintOp operand
-		check.expr(nil, &constraintOp, s.Constraint)
-		if constraintOp.mode() != constant_ {
-			check.error(s.Constraint, InvalidConstVal, "constraint must be a constant")
-			return
-		}
-	}
-
 	check.openScope(s, "range")
 	defer check.closeScope()
 

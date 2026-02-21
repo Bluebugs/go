@@ -1347,18 +1347,7 @@ func (p *parser) parseTypeInstance(typ ast.Expr) ast.Expr {
 	p.exprLev++
 	var list []ast.Expr
 	for p.tok != token.RBRACK && p.tok != token.EOF {
-		if len(list) > 0 && buildcfg.Experiment.SPMD {
-			// SPMD extension: for constrained types like lanes.Varying[T, N],
-			// subsequent arguments may be constant expressions (not types).
-			// Try type first, fall back to expression.
-			if t := p.tryIdentOrType(); t != nil {
-				list = append(list, t)
-			} else {
-				list = append(list, p.parseRhs())
-			}
-		} else {
-			list = append(list, p.parseType())
-		}
+		list = append(list, p.parseType())
 		if !p.atComma("type argument list", token.RBRACK) {
 			break
 		}
@@ -1598,18 +1587,7 @@ func (p *parser) parseIndexOrSliceOrInstance(x ast.Expr) ast.Expr {
 		for p.tok == token.COMMA {
 			p.next()
 			if p.tok != token.RBRACK && p.tok != token.EOF {
-				if buildcfg.Experiment.SPMD {
-					// SPMD extension: for constrained types like lanes.Varying[T, N],
-					// subsequent arguments may be constant expressions (not types).
-					// Try type first, fall back to expression.
-					if t := p.tryIdentOrType(); t != nil {
-						args = append(args, t)
-					} else {
-						args = append(args, p.parseRhs())
-					}
-				} else {
-					args = append(args, p.parseType())
-				}
+				args = append(args, p.parseType())
 			}
 		}
 	}
@@ -2059,11 +2037,9 @@ func (p *parser) parseGoStmt() ast.Stmt {
 // parseSpmdForStmt parses SPMD "go for" range loops.
 // It handles:
 //   - go for range X { }
-//   - go for range[N] X { }
 //   - go for key := range X { }
-//   - go for key := range[N] X { }
 //   - go for key, value := range X { }
-//   - go for key, value := range[N] X { }
+//
 // The goPos parameter is the position of the "go" keyword.
 func (p *parser) parseSpmdForStmt(goPos token.Pos) ast.Stmt {
 	if p.trace {
@@ -2079,17 +2055,15 @@ func (p *parser) parseSpmdForStmt(goPos token.Pos) ast.Stmt {
 	var tokPos token.Pos
 	var tok token.Token
 	var rangePos token.Pos
-	var constraint ast.Expr
 	var x ast.Expr
 
 	if p.tok == token.RANGE {
-		// "go for range ..." or "go for range[N] ..."
+		// "go for range ..."
 		rangePos = p.pos
 		p.next()
-		constraint = p.parseSpmdConstraint()
 		x = p.parseRhs()
 	} else if p.tok != token.LBRACE {
-		// Parse LHS expressions (key or key, value), then := or = then range[N] expr
+		// Parse LHS expressions (key or key, value), then := or = then range expr
 		lhs := p.parseList(false)
 
 		// Expect := or =
@@ -2116,7 +2090,6 @@ func (p *parser) parseSpmdForStmt(goPos token.Pos) ast.Stmt {
 		rangePos = p.pos
 		p.next()
 
-		constraint = p.parseSpmdConstraint()
 		x = p.parseRhs()
 
 		switch len(lhs) {
@@ -2146,33 +2119,16 @@ func (p *parser) parseSpmdForStmt(goPos token.Pos) ast.Stmt {
 	p.expectSemi()
 
 	return &ast.RangeStmt{
-		For:        goPos,
-		Key:        key,
-		Value:      value,
-		TokPos:     tokPos,
-		Tok:        tok,
-		Range:      rangePos,
-		X:          x,
-		Body:       body,
-		IsSpmd:     true,
-		Constraint: constraint,
+		For:    goPos,
+		Key:    key,
+		Value:  value,
+		TokPos: tokPos,
+		Tok:    tok,
+		Range:  rangePos,
+		X:      x,
+		Body:   body,
+		IsSpmd: true,
 	}
-}
-
-// parseSpmdConstraint parses the optional [N] constraint after "range" in SPMD loops.
-// Returns nil if no constraint is present.
-func (p *parser) parseSpmdConstraint() ast.Expr {
-	if p.tok != token.LBRACK {
-		return nil
-	}
-	p.next() // consume [
-	if p.tok == token.RBRACK {
-		p.next() // consume ] — empty/universal constraint
-		return nil
-	}
-	constraint := p.parseRhs()
-	p.expect(token.RBRACK)
-	return constraint
 }
 
 func (p *parser) parseDeferStmt() ast.Stmt {

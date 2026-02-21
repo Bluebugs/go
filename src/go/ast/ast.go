@@ -780,9 +780,8 @@ type (
 		Range      token.Pos   // position of "range" keyword
 		X          Expr        // value to range over
 		Body       *BlockStmt
-		IsSpmd     bool        // true for "go for" SPMD loops
-		LaneCount  int64       // effective SIMD lane count (set by type checker)
-		Constraint Expr        // SPMD constraint expression from range[N] syntax; nil if unconstrained
+		IsSpmd     bool  // true for "go for" SPMD loops
+		LaneCount  int64 // effective SIMD lane count (set by type checker)
 	}
 )
 
