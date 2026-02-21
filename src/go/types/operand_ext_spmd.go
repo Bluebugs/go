@@ -103,13 +103,10 @@ func (x *operand) checkSPMDtoSPMDAssignability(vSPMD, tSPMD *SPMDType, cause *st
 					return true // varying can be assigned to varying[4] or varying[]
 				}
 
-				// FORBIDDEN: Constrained varying to unconstrained varying (varying[4] -> varying)
-				// This requires explicit lanes.FromConstrained() call
+				// ALLOWED: Constrained varying to unconstrained varying (varying[4] -> varying)
+				// The TinyGo backend handles width mismatch via spmdResizeVector().
 				if vSPMD.constraint > 0 && tSPMD.constraint == -1 {
-					if cause != nil {
-						*cause = "cannot assign constrained varying to unconstrained varying; use lanes.FromConstrained() for explicit conversion"
-					}
-					return false
+					return true
 				}
 			}
 
