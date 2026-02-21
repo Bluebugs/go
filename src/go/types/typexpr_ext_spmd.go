@@ -8,7 +8,6 @@ package types
 
 import (
 	"go/ast"
-	"go/constant"
 	"internal/buildcfg"
 	. "internal/types/errors"
 )
@@ -71,12 +70,12 @@ func (check *Checker) isLanesVaryingExpr(x ast.Expr) bool {
 	return false
 }
 
-// processLanesVaryingType creates an SPMDType from lanes.Varying[T] or lanes.Varying[T, N]
+// processLanesVaryingType creates an SPMDType from lanes.Varying[T]
 func (check *Checker) processLanesVaryingType(ix *indexedExpr, def *TypeName) (Type, bool) {
 	args := ix.indices // Already unpacked
 
-	if len(args) < 1 || len(args) > 2 {
-		check.errorf(ix.orig, InvalidSPMDType, "lanes.Varying requires 1 or 2 type arguments, got %d", len(args))
+	if len(args) != 1 {
+		check.errorf(ix.orig, InvalidSPMDType, "lanes.Varying takes exactly one type argument, got %d", len(args))
 		return Typ[Invalid], true
 	}
 
@@ -92,55 +91,8 @@ func (check *Checker) processLanesVaryingType(ix *indexedExpr, def *TypeName) (T
 		return Typ[Invalid], true
 	}
 
-	var constraint int64 = -1 // unconstrained by default
-
-	// Handle optional second argument: constraint N
-	if len(args) == 2 {
-		var x operand
-		check.expr(nil, &x, args[1])
-
-		if x.mode() != constant_ {
-			check.error(args[1], InvalidConstVal, "lanes.Varying constraint must be a compile-time constant")
-			return Typ[Invalid], true
-		}
-
-		if !isInteger(x.typ()) {
-			check.error(args[1], InvalidConstVal, "lanes.Varying constraint must be an integer constant")
-			return Typ[Invalid], true
-		}
-
-		val, ok := constant.Int64Val(x.val)
-		if !ok {
-			check.error(args[1], InvalidConstVal, "lanes.Varying constraint out of range")
-			return Typ[Invalid], true
-		}
-
-		if val == 0 {
-			// lanes.Varying[T, 0] means universal constraint (like old varying[] T)
-			constraint = 0
-		} else if val < 1 {
-			check.error(args[1], InvalidConstVal, "lanes.Varying constraint must be non-negative")
-			return Typ[Invalid], true
-		} else {
-			constraint = val
-		}
-
-		// Validate constrained varying capacity (512 bits = 64 bytes limit)
-		if constraint > 0 {
-			elementSize := check.calculateTypeSize(elem)
-			totalSize := constraint * elementSize
-
-			const maxConstrainedCapacity = 64 // 512 bits = 64 bytes
-
-			if totalSize > maxConstrainedCapacity {
-				check.error(args[1], InvalidConstVal, "constrained varying capacity exceeded")
-				return Typ[Invalid], true
-			}
-		}
-	}
-
 	// Create the SPMD type (always varying - uniform is implicit via regular Go types)
-	typ := NewVaryingConstrained(elem, constraint)
+	typ := NewVarying(elem)
 
 	// Set the type on def if provided (for type declarations)
 	if def != nil {
@@ -199,67 +151,3 @@ func (check *Checker) validateSPMDTypeRestrictions(typ Type) string {
 	}
 }
 
-// calculateTypeSize returns the size in bytes of a single element type for capacity calculations
-// For constrained varying, this calculates the size of T in varying[n] T
-func (check *Checker) calculateTypeSize(t Type) int64 {
-	switch t := t.Underlying().(type) {
-	case *Basic:
-		switch t.kind {
-		case Bool, Uint8, Int8:
-			return 1
-		case Uint16, Int16:
-			return 2
-		case Uint32, Int32, Float32:
-			return 4
-		case Uint64, Int64, Float64:
-			return 8
-		case Uintptr, UnsafePointer:
-			return 8 // Assume 64-bit pointers
-		default:
-			return 8 // Default safe size
-		}
-	case *Array:
-		// For arrays in constrained varying context, we want the total array size
-		// because varying[n] [4]int means n instances of [4]int
-		elemSize := check.calculateTypeSize(t.elem)
-		return t.len * elemSize
-	case *Slice:
-		return 24 // Slice header: pointer + len + cap (3 * 8 bytes)
-	case *Pointer:
-		return 8 // 64-bit pointer
-	default:
-		return 8 // Default safe size
-	}
-}
-
-// calculateBaseTypeSize returns the size of the base element type, ignoring array dimensions
-// For constrained varying capacity validation: varying[n] [4]int -> size of int (not [4]int)
-func (check *Checker) calculateBaseTypeSize(t Type) int64 {
-	switch t := t.Underlying().(type) {
-	case *Basic:
-		switch t.kind {
-		case Bool, Uint8, Int8:
-			return 1
-		case Uint16, Int16:
-			return 2
-		case Uint32, Int32, Float32:
-			return 4
-		case Uint64, Int64, Float64:
-			return 8
-		case Uintptr, UnsafePointer:
-			return 8 // Assume 64-bit pointers
-		default:
-			return 8 // Default safe size
-		}
-	case *Array:
-		// For constrained varying, drill down to the base element type
-		// varying[16] [4]int -> size of int (4 bytes), not [4]int (16 bytes)
-		return check.calculateBaseTypeSize(t.elem)
-	case *Slice:
-		return 24 // Slice header: pointer + len + cap (3 * 8 bytes)
-	case *Pointer:
-		return 8 // 64-bit pointer
-	default:
-		return 8 // Default safe size
-	}
-}

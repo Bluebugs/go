@@ -270,9 +270,8 @@ func (subst *subster) typ(typ Type) Type {
 		elem := subst.typ(t.elem)
 		if elem != t.elem {
 			return &SPMDType{
-				qualifier:  t.qualifier,
-				constraint: t.constraint,
-				elem:       elem,
+				qualifier: t.qualifier,
+				elem:      elem,
 			}
 		}
 

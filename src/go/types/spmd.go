@@ -12,22 +12,15 @@ const (
 	VaryingQualifier
 )
 
-// SPMDType represents a varying qualified type (lanes.Varying[T] or lanes.Varying[T, N]).
+// SPMDType represents a varying qualified type (lanes.Varying[T]).
 type SPMDType struct {
-	qualifier  SPMDQualifier
-	constraint int64
-	elem       Type
+	qualifier SPMDQualifier
+	elem      Type
 }
 
 // NewVarying returns a new varying type for the given element type.
 func NewVarying(elem Type) *SPMDType {
-	return &SPMDType{qualifier: VaryingQualifier, constraint: -1, elem: elem}
-}
-
-// NewVaryingConstrained returns a new constrained varying type for the given element type and constraint.
-// constraint: -1 for no constraint, 0 for universal ([]), >0 for numeric constraint
-func NewVaryingConstrained(elem Type, constraint int64) *SPMDType {
-	return &SPMDType{qualifier: VaryingQualifier, constraint: constraint, elem: elem}
+	return &SPMDType{qualifier: VaryingQualifier, elem: elem}
 }
 
 // Qualifier returns the SPMD qualifier (uniform or varying).
@@ -38,16 +31,6 @@ func (s *SPMDType) IsUniform() bool { return s.qualifier == UniformQualifier }
 
 // IsVarying reports whether the type is varying.
 func (s *SPMDType) IsVarying() bool { return s.qualifier == VaryingQualifier }
-
-// Constraint returns the varying constraint.
-// -1 for no constraint, 0 for universal ([]), >0 for numeric constraint.
-func (s *SPMDType) Constraint() int64 { return s.constraint }
-
-// IsConstrained reports whether the varying type has a constraint.
-func (s *SPMDType) IsConstrained() bool { return s.constraint >= 0 }
-
-// IsUniversalConstrained reports whether the varying type has a universal constraint ([]).
-func (s *SPMDType) IsUniversalConstrained() bool { return s.constraint == 0 }
 
 // Elem returns the element type of the SPMD type.
 func (s *SPMDType) Elem() Type { return s.elem }

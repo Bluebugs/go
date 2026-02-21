@@ -21,10 +21,7 @@ type SPMDControlFlowInfo struct {
 	effectiveLaneCount int64
 }
 
-const (
-	simd128CapacityBytes            = 16
-	constrainedVaryingCapacityBytes = 64
-)
+const simd128CapacityBytes = 16
 
 func (check *Checker) validateSPMDFunctionSignature(fdecl *ast.FuncDecl, sig *Signature) {
 	if !buildcfg.Experiment.SPMD {
@@ -93,13 +90,6 @@ func (check *Checker) laneCountForType(elem Type) int64 {
 
 func (check *Checker) calculateVaryingTypeCapacity(spmdType *SPMDType) int64 {
 	elementSize := check.getTypeSize(spmdType.elem)
-	if spmdType.IsConstrained() {
-		constraintValue := spmdType.Constraint()
-		if constraintValue == 0 {
-			return elementSize * check.laneCountForType(spmdType.elem)
-		}
-		return elementSize * constraintValue
-	}
 	return elementSize * check.laneCountForType(spmdType.elem)
 }
 
@@ -126,7 +116,7 @@ func (check *Checker) computeFunctionLaneCount(sig *Signature) int64 {
 	maxElemSize := int64(0)
 	found := false
 	for _, param := range sig.params.vars {
-		if spmdType, ok := param.typ.(*SPMDType); ok && spmdType.IsVarying() && !spmdType.IsConstrained() {
+		if spmdType, ok := param.typ.(*SPMDType); ok && spmdType.IsVarying() {
 			elemSize := check.getTypeSize(spmdType.elem)
 			if elemSize > maxElemSize {
 				maxElemSize = elemSize
