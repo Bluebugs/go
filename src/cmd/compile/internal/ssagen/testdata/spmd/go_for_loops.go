@@ -32,13 +32,13 @@ func testGoForWithMaskingSSA() {
 	}
 }
 
-// Test constrained go for loop generates unrolling or chunking
-func testConstrainedGoForSSA() {
+// Test go for loop with data processing generates vector operations
+func testGoForDataProcessingSSA() {
 	// EXPECT SSA: OpPhi (for chunk iteration)
-	// EXPECT SSA: OpVectorLoad (for constrained varying data)
-	// EXPECT SSA: OpCall (to lanes.FromConstrained)
-	go for i := range[4] 16 {
-		var data lanes.Varying[int32, 4]
+	// EXPECT SSA: OpVectorLoad (for varying data)
+	// EXPECT SSA: OpCall (to lanes.From)
+	go for i := range 16 {
+		var data lanes.Varying[int32]
 		process(int(data))
 		_ = i
 	}
