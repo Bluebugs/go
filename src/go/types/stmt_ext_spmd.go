@@ -57,7 +57,7 @@ func (check *Checker) handleSPMDStatement(s ast.Stmt, ctxt stmtContext) bool {
 	case *ast.ReturnStmt:
 		if ctxt&inSPMDFor != 0 {
 			check.validateSPMDReturn(s, ctxt)
-			return true
+			return false // Allow normal return processing to type-check expressions
 		}
 	case *ast.SwitchStmt:
 		if ctxt&inSPMDFor != 0 {

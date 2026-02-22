@@ -353,6 +353,20 @@ func testReduceOperationEdgeCases() {
 	}
 }
 
+// Test that return expressions are fully type-checked inside go for loops.
+// Regression test for "no type for *ast.CompositeLit" panic in x-tools SSA builder.
+type Point struct{ X, Y int }
+
+func testReturnExpressionTypeChecking(data []int, threshold int) (Point, error) {
+	go for i := range len(data) {
+		if threshold < 0 {
+			return Point{X: 1, Y: 2}, nil // OK: uniform condition, composite literal must be type-checked
+		}
+		_ = i
+	}
+	return Point{}, nil
+}
+
 // Helper function
 func process(x lanes.Varying[int]) {
 	_ = x
