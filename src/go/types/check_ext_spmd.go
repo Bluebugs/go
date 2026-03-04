@@ -140,20 +140,23 @@ func (check *Checker) getTypeSize(typ Type) int64 {
 			return 2
 		case Uint32, Int32, Float32:
 			return 4
-		case Int, Uint, Uint64, Int64, Float64:
+		case Uint64, Int64, Float64:
 			return 8
-		case Uintptr, UnsafePointer:
-			return 8
+		case Int, Uint, Uintptr, UnsafePointer:
+			// Platform-dependent sizes: use the configured Sizes
+			// to get the correct value for the target architecture
+			// (e.g., 4 bytes on WASM32, 8 bytes on amd64).
+			return check.conf.sizeof(typ)
 		default:
 			return 8
 		}
 	case *Array:
 		return check.getTypeSize(t.elem) * t.len
 	case *Slice:
-		return 24
+		return check.conf.sizeof(typ)
 	case *Pointer:
-		return 8
+		return check.conf.sizeof(typ)
 	default:
-		return 8
+		return check.conf.sizeof(typ)
 	}
 }
