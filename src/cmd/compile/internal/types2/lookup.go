@@ -8,6 +8,7 @@ package types2
 
 import (
 	"bytes"
+	"internal/buildcfg"
 )
 
 // LookupSelection selects the field or method whose ID is Id(pkg,
@@ -592,6 +593,11 @@ func (check *Checker) assertableTo(V, T Type, cause *string) bool {
 	if IsInterface(T) {
 		return true
 	}
+	// SPMDType has no methods of its own; unwrap to the element type so
+	// hasAllMethods checks the underlying type (e.g. int) against V.
+	if spmd, ok := T.(*SPMDType); ok && buildcfg.Experiment.SPMD {
+		return check.assertableTo(V, spmd.Elem(), cause)
+	}
 	// TODO(gri) fix this for generalized interfaces
 	return check.hasAllMethods(T, V, false, Identical, cause)
 }
@@ -607,6 +613,11 @@ func (check *Checker) newAssertableTo(V, T Type, cause *string) bool {
 	//        dynamic type of x implements the interface T."
 	if IsInterface(T) {
 		return true
+	}
+	// SPMDType has no methods of its own; unwrap to the element type so
+	// implements checks the underlying type (e.g. int) against V.
+	if spmd, ok := T.(*SPMDType); ok && buildcfg.Experiment.SPMD {
+		return check.newAssertableTo(V, spmd.Elem(), cause)
 	}
 	return check.implements(T, V, false, cause)
 }
