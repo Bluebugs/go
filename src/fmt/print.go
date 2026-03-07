@@ -820,6 +820,9 @@ func (p *pp) printValue(value reflect.Value, verb rune, depth int) {
 			p.buf.writeByte(']')
 		}
 	case reflect.Struct:
+		if p.printSPMDVarying(f, verb) {
+			break
+		}
 		if p.fmt.sharpV {
 			p.buf.writeString(f.Type().String())
 		}
@@ -916,6 +919,36 @@ func (p *pp) printValue(value reflect.Value, verb rune, depth int) {
 	default:
 		p.unknownType(f)
 	}
+}
+
+// printSPMDVarying detects boxed SPMD varying values (struct{Value [N]T; Mask [N]maskT})
+// tagged with spmd:"varying" and prints them with mask awareness: active lanes show
+// their value, inactive lanes show "_".
+// Returns true if the value was handled as a varying type.
+func (p *pp) printSPMDVarying(f reflect.Value, verb rune) bool {
+	t := f.Type()
+	if t.NumField() != 2 {
+		return false
+	}
+	if t.Field(0).Tag.Get("spmd") != "varying" {
+		return false
+	}
+	values := f.Field(0) // [N]T
+	masks := f.Field(1)  // [N]maskT
+	n := values.Len()
+	p.buf.writeByte('[')
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			p.buf.writeByte(' ')
+		}
+		if masks.Index(i).Int() != 0 {
+			p.printValue(values.Index(i), verb, 0)
+		} else {
+			p.buf.writeByte('_')
+		}
+	}
+	p.buf.writeByte(']')
+	return true
 }
 
 // intFromArg gets the argNumth element of a. On return, isInt reports whether the argument has integer type.
