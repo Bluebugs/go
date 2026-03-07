@@ -54,6 +54,15 @@ func (check *Checker) handleSPMDStatement(s ast.Stmt, ctxt stmtContext) bool {
 			check.spmdIfStmt(s, ctxt)
 			return true
 		}
+	case *ast.ExprStmt:
+		if ctxt&inSPMDFor != 0 {
+			if call, ok := s.X.(*ast.CallExpr); ok {
+				if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == "panic" {
+					check.validateSPMDPanic(s, ctxt)
+				}
+			}
+			return false // Allow normal expression processing to continue
+		}
 	case *ast.ReturnStmt:
 		if ctxt&inSPMDFor != 0 {
 			check.validateSPMDReturn(s, ctxt)
@@ -218,6 +227,19 @@ func (check *Checker) validateSPMDBranch(s *ast.BranchStmt, ctxt stmtContext) {
 			} else {
 				check.error(s, InvalidSPMDBreak, "break statement not allowed under varying conditions in SPMD for loop")
 			}
+		}
+	}
+}
+
+// validateSPMDPanic validates panic calls in SPMD context.
+// Note: matches by identifier name; a local `panic` shadowing the builtin
+// would produce a false positive. Deferred: resolve via *types.Builtin check.
+func (check *Checker) validateSPMDPanic(s *ast.ExprStmt, ctxt stmtContext) {
+	if check.spmdInfo.varyingDepth > 0 || check.spmdInfo.maskAltered {
+		if check.spmdInfo.maskAltered {
+			check.error(s, InvalidSPMDPanic, "panic not allowed after continue in varying context in SPMD for loop")
+		} else {
+			check.error(s, InvalidSPMDPanic, "panic not allowed under varying conditions in SPMD for loop")
 		}
 	}
 }

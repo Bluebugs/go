@@ -367,6 +367,53 @@ func testReturnExpressionTypeChecking(data []int, threshold int) (Point, error) 
 	return Point{}, nil
 }
 
+// Test panic restrictions in SPMD context
+func testPanicRestrictions() {
+	data := []int{1, 2, 3, 4}
+	mode := 1
+
+	// panic under uniform condition is OK
+	go for i := range len(data) {
+		if mode < 0 {
+			panic("negative mode") // OK: uniform condition
+		}
+		process(i)
+	}
+
+	// panic under varying condition is FORBIDDEN
+	go for i := range len(data) {
+		if i > 2 { // varying condition
+			panic("too high") // ERROR "panic not allowed under varying conditions in SPMD for loop"
+		}
+		process(i)
+	}
+
+	// panic after mask alteration is FORBIDDEN
+	go for i := range len(data) {
+		if i > 5 { // varying condition
+			continue // alters mask
+		}
+		if mode > 0 { // uniform, but mask altered
+			panic("altered") // ERROR "panic not allowed after continue in varying context in SPMD for loop"
+		}
+		process(i)
+	}
+
+	// panic at top level of go for (no varying context) is OK
+	go for i := range len(data) {
+		if mode == 42 {
+			panic("direct") // OK: uniform condition
+		}
+		process(i)
+	}
+
+	// bare panic at top of go for body (no if guard) is OK
+	go for i := range len(data) {
+		panic("always") // OK: no varying context, varyingDepth==0, maskAltered==false
+		process(i)
+	}
+}
+
 // Helper function
 func process(x lanes.Varying[int]) {
 	_ = x
