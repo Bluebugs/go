@@ -187,7 +187,15 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 	defer check.closeScope()
 	check.stmtList(inner, s.Body.List)
 
-	check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(Typ[Int]))
+	// For rangeindex (array/slice), the loop index is decomposable (scalar base +
+	// vector offset), so its int size should not dominate lane count. Use the
+	// value element type instead to maximize lanes (e.g., byte → 16 lanes).
+	// For rangeint (range over integer), the index IS the data, so use int size.
+	if rVal != nil {
+		check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(rVal))
+	} else {
+		check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(Typ[Int]))
+	}
 	s.LaneCount = check.computeEffectiveLaneCount(&check.spmdInfo)
 }
 
