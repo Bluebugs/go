@@ -595,10 +595,3 @@ L:
 		}
 	}
 }
-
-// Add SPMD info to Checker if not already present
-func (check *Checker) initSPMDInfo() {
-	// Initialize spmdInfo field if it doesn't exist
-	// This would typically be added to the Checker struct
-}
-

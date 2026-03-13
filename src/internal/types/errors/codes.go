@@ -1522,4 +1522,5 @@ const (
 	// InvalidSPMDPanic occurs when a panic statement is used under varying
 	// conditions or after mask alteration in an SPMD for loop.
 	InvalidSPMDPanic
+
 )

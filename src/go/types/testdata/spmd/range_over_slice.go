@@ -34,3 +34,28 @@ func rangeOverInt() {
 		_ = i
 	}
 }
+
+// Range over a slice of pointers: pointer element type is allowed
+func rangeOverPtrSlice(data []*int32) {
+	go for _, v := range data {
+		_ = v
+	}
+}
+
+// Range over a slice of slices: aggregate element type lowers to [1 x sliceStruct]
+// (serial execution, laneCount=1). No longer a type-checker error.
+func rangeOverSliceOfSlices(data [][]int) {
+	go for _, v := range data {
+		_ = v
+	}
+}
+
+// Range over a slice of structs: aggregate element type lowers to [1 x struct]
+// (serial execution, laneCount=1). No longer a type-checker error.
+type Point struct{ X, Y int32 }
+
+func rangeOverStructSlice(data []Point) {
+	go for _, v := range data {
+		_ = v
+	}
+}
