@@ -134,7 +134,7 @@ func testMixedControlFlow() {
 			if j > 2 {
 				break // OK: break in regular for inside go for
 			}
-			processC(int(i) + j)
+			processC(i + j)
 		}
 
 		if i > 5 { // varying condition
@@ -143,7 +143,7 @@ func testMixedControlFlow() {
 
 		// But another go for is not allowed
 		go /* ERROR "nested `go for` loop (prohibited for now)" */ for k := range 3 {
-			processC(int(i) + k)
+			processC(i + k)
 		}
 	}
 }

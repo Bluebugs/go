@@ -25,7 +25,7 @@ func testBasicPointerOperations() {
 	uPtr := &data[0]
 	go for i := range 4 {
 		value := *uPtr  // Same pointer accessed by all lanes
-		process(value + int(i))
+		process(value + i)
 	}
 }
 
@@ -37,7 +37,7 @@ func testVaryingPointerArithmetic() {
 	go for i := range 8 {
 		// Valid: pointer arithmetic with varying offset
 		vOffset := lanes.Varying[uintptr](i)
-		vPtr := (*int)(unsafe.Add(unsafe.Pointer(basePtr), vOffset*unsafe.Sizeof(int(i))))
+		vPtr := (*int)(unsafe.Add(unsafe.Pointer(basePtr), vOffset*unsafe.Sizeof(int(0))))
 		value := *vPtr
 		process(value)
 	}

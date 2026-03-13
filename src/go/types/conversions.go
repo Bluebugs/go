@@ -152,12 +152,23 @@ func (x *operand) convertibleTo(check *Checker, T Type, cause *string) bool {
 	// as SPMDType.Underlying() unwraps to the element type, which would
 	// incorrectly allow upcasts (e.g., Varying[uint16] → Varying[uint32]).
 	if buildcfg.Experiment.SPMD {
-		_, vIsSPMD := x.typ().(*SPMDType)
+		vSPMD, vIsSPMD := x.typ().(*SPMDType)
 		_, tIsSPMD := T.(*SPMDType)
 		if vIsSPMD && tIsSPMD {
 			// Preserve the cause from convertibleToSPMD if it was set
 			if cause != nil && *cause == "" {
 				*cause = "SPMD to SPMD conversions must use convertibleToSPMD"
+			}
+			return false
+		}
+		// Explicit cast from varying to the same uniform element type is forbidden.
+		// e.g., int(Varying[int]) would fool standard Go conversion rules via
+		// Varying[T].Underlying() == T, silently stripping the varying qualifier.
+		// Cross-type conversions like int32(Varying[int]) are allowed and produce
+		// Varying[int32] in the backend. Use reduce.From() to extract elements.
+		if vIsSPMD && !tIsSPMD && vSPMD.IsVarying() && Identical(vSPMD.Elem(), T) {
+			if cause != nil {
+				*cause = "cannot explicitly convert varying value to same uniform type; use reduce.From() to extract elements"
 			}
 			return false
 		}
