@@ -692,9 +692,10 @@ var cgoPrefixes = [...]string{
 func (check *Checker) selector(x *operand, e *ast.SelectorExpr, wantType bool) {
 	// these must be declared before the "goto Error" statements
 	var (
-		obj      Object
-		index    []int
-		indirect bool
+		obj          Object
+		index        []int
+		indirect     bool
+		receiverType Type
 	)
 
 	sel := e.Sel.Name
@@ -831,7 +832,8 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr, wantType bool) {
 		goto Error
 	}
 
-	obj, index, indirect = lookupFieldOrMethod(x.typ(), x.mode() == variable, check.pkg, sel, false)
+	receiverType = x.typ()
+	obj, index, indirect = lookupFieldOrMethod(receiverType, x.mode() == variable, check.pkg, sel, false)
 	if obj == nil {
 		// Don't report another error if the underlying type was invalid (go.dev/issue/49541).
 		if !isValid(x.typ().Underlying()) {
@@ -879,7 +881,7 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr, wantType bool) {
 		} else {
 			x.mode_ = value
 		}
-		x.typ_ = obj.typ
+		x.typ_ = spmdWrapFieldType(receiverType, obj.typ)
 
 	case *Func:
 		check.objDecl(obj) // ensure fully set-up signature

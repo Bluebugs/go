@@ -1,10 +1,8 @@
 // -goexperiment spmd
 
 // Test file for pointer-to-varying-struct field access.
-// Before fix: field access through *Varying[Struct] returns uniform field type,
-// causing assignment errors when trying to assign varying values.
-// The annotations below capture the current (buggy) behavior.
-// After fix: these annotations will be removed when field access returns varying.
+// Field access through *Varying[Struct] returns Varying[fieldType], allowing
+// assignment of varying values to struct fields via varying pointer.
 package spmdtest
 
 import "lanes"
@@ -16,9 +14,9 @@ func structPointers() {
 	points := [4]IntPoint{}
 	go for i := range 4 {
 		pointPtr := &points[i] // &points[varyingIndex] gives *Varying[IntPoint]
-		// Currently: pointPtr.X is uniform int, so varying assignments fail
-		pointPtr.X = v /* ERROR "cannot assign varying" */
-		pointPtr.Y = v /* ERROR "cannot assign varying" */
+		// Field access through *Varying[IntPoint] returns Varying[int], so varying assignment is valid.
+		pointPtr.X = v
+		pointPtr.Y = v
 	}
 }
 
