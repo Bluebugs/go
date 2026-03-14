@@ -262,7 +262,14 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 				obj.typ = NewVarying(Typ[Int])
 			} else if i == 1 && sValue != nil {
 				if rVal != nil {
-					obj.typ = NewVarying(rVal)
+					// If the element type is already Varying[T], use it directly.
+					// Wrapping again would produce Varying[Varying[T]] which has no
+					// valid LLVM representation (nested vectors are illegal).
+					if _, alreadyVarying := rVal.(*SPMDType); alreadyVarying {
+						obj.typ = rVal
+					} else {
+						obj.typ = NewVarying(rVal)
+					}
 				} else {
 					obj.typ = Typ[Invalid]
 				}
@@ -296,8 +303,20 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s, rangeStmt syntax.Stmt,
 	defer check.closeScope()
 	check.stmtList(inner, blockStmt.List)
 
-	// Track the implicit varying loop variable for lane count computation
-	globalSPMDInfo.varyingElemSizes = append(globalSPMDInfo.varyingElemSizes, check.getTypeSize(Typ[Int]))
+	// Track the varying element size for lane count computation.
+	// For rangeindex loops, the element type drives lane count (not the index).
+	// Special case: when the slice element is already Varying[T], the outer loop
+	// processes one full vector per step (laneCount=1). Use the full SIMD register
+	// size (16 bytes) so that computeEffectiveLaneCount returns 16/16=1.
+	if rVal != nil {
+		if _, alreadyVarying := rVal.(*SPMDType); alreadyVarying {
+			globalSPMDInfo.varyingElemSizes = append(globalSPMDInfo.varyingElemSizes, int64(simd128CapacityBytes))
+		} else {
+			globalSPMDInfo.varyingElemSizes = append(globalSPMDInfo.varyingElemSizes, check.getTypeSize(rVal))
+		}
+	} else {
+		globalSPMDInfo.varyingElemSizes = append(globalSPMDInfo.varyingElemSizes, check.getTypeSize(Typ[Int]))
+	}
 
 	// Compute and record effective lane count
 	forStmt.LaneCount = check.computeEffectiveLaneCount(&globalSPMDInfo)

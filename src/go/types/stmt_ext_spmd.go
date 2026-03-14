@@ -161,7 +161,14 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 				obj.typ = NewVarying(Typ[Int])
 			} else if i == 1 && s.Value != nil {
 				if rVal != nil {
-					obj.typ = NewVarying(rVal)
+					// If the element type is already Varying[T], use it directly.
+					// Wrapping again would produce Varying[Varying[T]] which has no
+					// valid LLVM representation (nested vectors are illegal).
+					if _, alreadyVarying := rVal.(*SPMDType); alreadyVarying {
+						obj.typ = rVal
+					} else {
+						obj.typ = NewVarying(rVal)
+					}
 				} else {
 					obj.typ = Typ[Invalid]
 				}
@@ -191,8 +198,15 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 	// vector offset), so its int size should not dominate lane count. Use the
 	// value element type instead to maximize lanes (e.g., byte → 16 lanes).
 	// For rangeint (range over integer), the index IS the data, so use int size.
+	// Special case: when the slice element is already Varying[T], the outer loop
+	// processes one full vector per step (laneCount=1). Use the full SIMD register
+	// size (16 bytes) so that computeEffectiveLaneCount returns 16/16=1.
 	if rVal != nil {
-		check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(rVal))
+		if _, alreadyVarying := rVal.(*SPMDType); alreadyVarying {
+			check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, int64(simd128CapacityBytes))
+		} else {
+			check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(rVal))
+		}
 	} else {
 		check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(Typ[Int]))
 	}
