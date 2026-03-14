@@ -93,3 +93,24 @@ func (check *Checker) validateSPMDMakeType(arg syntax.Expr, T Type) {
 	// Map validation is now handled by validateSPMDTypeRestrictions in type validation
 	// No additional validation needed here
 }
+
+// spmdWrapFieldType returns the SPMD-adjusted type for a struct field access.
+// When the receiver is *Varying[S] (a uniform pointer to a varying struct),
+// field access should return Varying[fieldType], not fieldType.
+// For all other receivers, the field type is returned unchanged.
+func spmdWrapFieldType(receiverType, fieldType Type) Type {
+	if !buildcfg.Experiment.SPMD {
+		return fieldType
+	}
+	ptr, ok := receiverType.(*Pointer)
+	if !ok {
+		return fieldType
+	}
+	if _, ok := ptr.Elem().(*SPMDType); !ok {
+		return fieldType
+	}
+	if _, alreadyVarying := fieldType.(*SPMDType); alreadyVarying {
+		return fieldType
+	}
+	return NewVarying(fieldType)
+}
