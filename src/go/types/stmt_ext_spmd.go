@@ -203,7 +203,7 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 	// size (16 bytes) so that computeEffectiveLaneCount returns 16/16=1.
 	if rVal != nil {
 		if _, alreadyVarying := rVal.(*SPMDType); alreadyVarying {
-			check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, int64(simd128CapacityBytes))
+			check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.simdRegisterSize())
 		} else {
 			check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(rVal))
 		}

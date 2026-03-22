@@ -177,6 +177,13 @@ type Config struct {
 	// Otherwise SizesFor("gc", "amd64") is used instead.
 	Sizes Sizes
 
+	// SIMDRegisterSize is the SIMD register width in bytes for SPMD compilation.
+	// Used to compute lane counts for Varying[T] types (lanes = SIMDRegisterSize / sizeof(T)).
+	// Zero means use default (16 bytes = 128-bit SIMD).
+	// Set to match the target's SIMD capability (e.g., 16 for WASM SIMD128, 32 for AVX2).
+	// To disable SIMD (scalar fallback), set to 1.
+	SIMDRegisterSize int64
+
 	// If DisableUnusedImportCheck is set, packages are not checked
 	// for unused imports.
 	DisableUnusedImportCheck bool

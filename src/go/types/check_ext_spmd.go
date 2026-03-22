@@ -21,7 +21,14 @@ type SPMDControlFlowInfo struct {
 	effectiveLaneCount int64
 }
 
-const simd128CapacityBytes = 16
+// simdRegisterSize returns the SIMD register width in bytes.
+// Uses Config.SIMDRegisterSize if set, otherwise defaults to 16 (128-bit).
+func (check *Checker) simdRegisterSize() int64 {
+	if check.conf.SIMDRegisterSize > 0 {
+		return check.conf.SIMDRegisterSize
+	}
+	return 16 // default: 128-bit SIMD (WASM SIMD128, SSE, NEON)
+}
 
 func (check *Checker) validateSPMDFunctionSignature(fdecl *ast.FuncDecl, sig *Signature) {
 	if !buildcfg.Experiment.SPMD {
@@ -81,7 +88,7 @@ func (check *Checker) laneCountForType(elem Type) int64 {
 	if elemSize <= 0 {
 		return 4
 	}
-	lc := int64(simd128CapacityBytes) / elemSize
+	lc := check.simdRegisterSize() / elemSize
 	if lc <= 0 {
 		return 1
 	}
@@ -95,7 +102,7 @@ func (check *Checker) calculateVaryingTypeCapacity(spmdType *SPMDType) int64 {
 
 func (check *Checker) computeEffectiveLaneCount(info *SPMDControlFlowInfo) int64 {
 	if len(info.varyingElemSizes) == 0 {
-		return int64(simd128CapacityBytes) / 4
+		return check.simdRegisterSize() / 4
 	}
 	maxElemSize := int64(0)
 	for _, size := range info.varyingElemSizes {
@@ -106,7 +113,7 @@ func (check *Checker) computeEffectiveLaneCount(info *SPMDControlFlowInfo) int64
 	if maxElemSize <= 0 {
 		return 4
 	}
-	return int64(simd128CapacityBytes) / maxElemSize
+	return check.simdRegisterSize() / maxElemSize
 }
 
 func (check *Checker) computeFunctionLaneCount(sig *Signature) int64 {
@@ -127,7 +134,7 @@ func (check *Checker) computeFunctionLaneCount(sig *Signature) int64 {
 	if !found {
 		return 0
 	}
-	return int64(simd128CapacityBytes) / maxElemSize
+	return check.simdRegisterSize() / maxElemSize
 }
 
 func (check *Checker) getTypeSize(typ Type) int64 {
