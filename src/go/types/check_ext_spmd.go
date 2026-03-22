@@ -102,7 +102,11 @@ func (check *Checker) calculateVaryingTypeCapacity(spmdType *SPMDType) int64 {
 
 func (check *Checker) computeEffectiveLaneCount(info *SPMDControlFlowInfo) int64 {
 	if len(info.varyingElemSizes) == 0 {
-		return check.simdRegisterSize() / 4
+		lc := check.simdRegisterSize() / 4
+		if lc <= 0 {
+			return 1
+		}
+		return lc
 	}
 	maxElemSize := int64(0)
 	for _, size := range info.varyingElemSizes {
@@ -113,7 +117,11 @@ func (check *Checker) computeEffectiveLaneCount(info *SPMDControlFlowInfo) int64
 	if maxElemSize <= 0 {
 		return 4
 	}
-	return check.simdRegisterSize() / maxElemSize
+	lc := check.simdRegisterSize() / maxElemSize
+	if lc <= 0 {
+		return 1
+	}
+	return lc
 }
 
 func (check *Checker) computeFunctionLaneCount(sig *Signature) int64 {
@@ -134,7 +142,11 @@ func (check *Checker) computeFunctionLaneCount(sig *Signature) int64 {
 	if !found {
 		return 0
 	}
-	return check.simdRegisterSize() / maxElemSize
+	lc := check.simdRegisterSize() / maxElemSize
+	if lc <= 0 {
+		return 1
+	}
+	return lc
 }
 
 func (check *Checker) getTypeSize(typ Type) int64 {
