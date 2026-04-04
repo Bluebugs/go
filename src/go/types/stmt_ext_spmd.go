@@ -125,12 +125,15 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 	check.openScope(s, "range")
 	defer check.closeScope()
 
-	// Determine value type from range expression (key is always int for SPMD)
-	var rVal Type
-	_, v, _, ok := rangeKeyVal(check, expr.typ(), func(ver goVersion) bool {
+	// Determine key and value types from range expression.
+	// For rangeint (range over integer N), key is the type of N, val is nil.
+	// For rangeindex (range over array/slice), key is int, val is element type.
+	var rKey, rVal Type
+	k, v, _, ok := rangeKeyVal(check, expr.typ(), func(ver goVersion) bool {
 		return check.allowVersion(ver)
 	})
 	if ok {
+		rKey = k
 		rVal = v
 	}
 
@@ -156,9 +159,19 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 			}
 
 			if i == 0 && s.Key != nil {
-				// SPMD loop index is always a concrete int, even when
-				// rangeKeyVal returns an untyped integer for range-over-int.
-				obj.typ = NewVarying(Typ[Int])
+				// SPMD loop index type: for rangeint use the range expression's key
+				// type (e.g., int32 for range int32(4)) so the iteration variable is
+				// Varying[int32] rather than Varying[int]. This ensures 4 lanes on
+				// platforms where int=8 bytes (x86-64), since Varying[int32]=<4 x i32>
+				// fits in a 128-bit register. For rangeindex, the key is always int.
+				// Untyped constants (range 4) default to int to preserve existing behavior.
+				if rKey != nil && rVal == nil && !isUntyped(rKey) {
+					// rangeint with explicit typed expression: use the expression's type.
+					obj.typ = NewVarying(rKey)
+				} else {
+					// rangeindex, untyped rangeint, or other: key is always int.
+					obj.typ = NewVarying(Typ[Int])
+				}
 			} else if i == 1 && s.Value != nil {
 				if rVal != nil {
 					// If the element type is already Varying[T], use it directly.
@@ -197,7 +210,10 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 	// For rangeindex (array/slice), the loop index is decomposable (scalar base +
 	// vector offset), so its int size should not dominate lane count. Use the
 	// value element type instead to maximize lanes (e.g., byte → 16 lanes).
-	// For rangeint (range over integer), the index IS the data, so use int size.
+	// For rangeint (range over integer), the index IS the data, so use the range
+	// expression's key type. For range int32(4), this gives sizeof(int32)=4 bytes
+	// and laneCount=4 on all platforms. For range 4 (untyped, becomes int), this
+	// gives sizeof(int) which is platform-dependent (4 on WASM, 8 on x86-64).
 	// Special case: when the slice element is already Varying[T], the outer loop
 	// processes one full vector per step (laneCount=1). Use the full SIMD register
 	// size (16 bytes) so that computeEffectiveLaneCount returns 16/16=1.
@@ -207,6 +223,10 @@ func (check *Checker) spmdRangeStmt(inner stmtContext, s *ast.RangeStmt) {
 		} else {
 			check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(rVal))
 		}
+	} else if rKey != nil && !isUntyped(rKey) {
+		// rangeint with explicit typed key: use the key type's size for lane count.
+		// Untyped (range 4) defaults to int to preserve existing behavior.
+		check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(rKey))
 	} else {
 		check.spmdInfo.varyingElemSizes = append(check.spmdInfo.varyingElemSizes, check.getTypeSize(Typ[Int]))
 	}
