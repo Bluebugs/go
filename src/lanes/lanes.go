@@ -187,18 +187,6 @@ func SwizzleWithin[T any](v Varying[T], indices Varying[int], groupSize int) Var
 	panic("lanes.SwizzleWithin is a compiler builtin and should be replaced during compilation")
 }
 
-// DotProductI8x16Add computes a SIMD dot product of two [16]byte vectors
-// with horizontal accumulation into [4]int. Each group of 4 input bytes
-// produces one int: result[i] = sum(a[4i+j]*b[4i+j] for j in 0..3) + acc[i].
-//
-// On WASM Relaxed SIMD, this maps to i32x4.relaxed_dot_i8x16_i7x16_add_s.
-// The second argument values must be in [-64, 63] (signed 7-bit range).
-//
-//go:noinline
-func DotProductI8x16Add(a, b [16]byte, acc [4]int) [4]int {
-	panic("lanes.DotProductI8x16Add is a compiler intrinsic")
-}
-
 // Type constraints for generic functions
 type integer interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
