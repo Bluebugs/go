@@ -190,6 +190,14 @@ func SwizzleWithin[T any](v Varying[T], indices Varying[int], groupSize int) Var
 // CompactStore writes the active lanes of v contiguously to dst.
 // Active means both the explicit mask lane is true AND the current
 // execution mask lane is active. Returns the number of elements written.
+//
+// The underlying store may write up to lanes.Count[T]() elements to the
+// destination memory, even though only n elements contain valid data.
+// The caller must ensure the destination slice's backing array has at
+// least lanes.Count[T]() elements of accessible memory beyond the current
+// offset. In practice, allocate output_len + lanes.Count[T]() and advance
+// by the returned n. Trailing bytes are overwritten by subsequent calls.
+//
 // COMPILER BUILTIN: replaced with SIMD compress-store instructions.
 //
 //go:noinline
