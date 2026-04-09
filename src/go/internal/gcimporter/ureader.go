@@ -335,7 +335,11 @@ func (r *reader) doTyp() (res types.Type) {
 		if isVarying {
 			r.Int64() // consume constraint, not used in go/types
 		}
-		return r.typ()
+		elem := r.typ()
+		if isVarying {
+			return types.NewVarying(elem)
+		}
+		return elem
 	}
 }
 
