@@ -187,6 +187,16 @@ func SwizzleWithin[T any](v Varying[T], indices Varying[int], groupSize int) Var
 	panic("lanes.SwizzleWithin is a compiler builtin and should be replaced during compilation")
 }
 
+// CompactStore writes the active lanes of v contiguously to dst.
+// Active means both the explicit mask lane is true AND the current
+// execution mask lane is active. Returns the number of elements written.
+// COMPILER BUILTIN: replaced with SIMD compress-store instructions.
+//
+//go:noinline
+func CompactStore[T any](dst []T, v Varying[T], mask Varying[bool]) int {
+	panic("lanes.CompactStore is a compiler builtin and should be replaced during compilation")
+}
+
 // Type constraints for generic functions
 type integer interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
