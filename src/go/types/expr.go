@@ -142,6 +142,11 @@ func (check *Checker) unary(x *operand, e *ast.UnaryExpr) {
 			x.invalidate()
 			return
 		}
+		// SPMD: &Varying[T] produces Varying[*T] (per-lane pointer vector).
+		if check.handleSPMDAddrOf(x) {
+			return
+		}
+
 		x.mode_ = value
 		x.typ_ = &Pointer{base: x.typ()}
 		return

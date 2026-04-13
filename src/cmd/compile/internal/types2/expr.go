@@ -145,17 +145,12 @@ func (check *Checker) unary(x *operand, e *syntax.Operation) {
 			return
 		}
 
-		// SPMD validation: cannot take address of varying variable directly (but allow indexed expressions)
+		// SPMD: &Varying[T] produces Varying[*T] (per-lane pointer vector).
 		if buildcfg.Experiment.SPMD {
 			if spmdType, ok := x.typ().(*SPMDType); ok && spmdType.IsVarying() {
-				// Check if this is a direct variable reference (not an indexed expression)
-				if _, ok := e.X.(*syntax.Name); ok {
-					// This is taking address of a varying variable directly - forbidden
-					check.errorf(x, InvalidSPMDType, "%s", "cannot take address of varying variable")
-					x.mode_ = invalid
-					return
-				}
-				// Otherwise, this is likely an indexed expression like data[i] - allow it
+				x.mode_ = value
+				x.typ_ = NewVarying(&Pointer{base: spmdType.Elem()})
+				return
 			}
 		}
 

@@ -113,6 +113,21 @@ func isArithmetic(op token.Token) bool {
 	return false
 }
 
+// handleSPMDAddrOf handles &Varying[T] producing Varying[*T] (per-lane pointer vector).
+// Returns true if SPMD handling was applied and x has been updated, false otherwise.
+func (check *Checker) handleSPMDAddrOf(x *operand) bool {
+	if !buildcfg.Experiment.SPMD {
+		return false
+	}
+	spmdType, ok := x.typ().(*SPMDType)
+	if !ok || !spmdType.IsVarying() {
+		return false
+	}
+	x.mode_ = value
+	x.typ_ = NewVarying(&Pointer{base: spmdType.Elem()})
+	return true
+}
+
 // handleSPMDIndexing handles varying type propagation for indexing expressions.
 // If the index is varying, the result should also be varying.
 func (check *Checker) handleSPMDIndexing(x *operand, indexType Type) {
