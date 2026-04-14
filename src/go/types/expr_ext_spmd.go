@@ -128,6 +128,28 @@ func (check *Checker) handleSPMDAddrOf(x *operand) bool {
 	return true
 }
 
+// handleSPMDIndirect handles *Varying[*T] producing Varying[T] (per-lane scatter/gather).
+// When dereferencing a varying pointer vector, each lane independently dereferences
+// its own pointer, producing a varying value. Returns true if SPMD handling was
+// applied and x has been updated, false otherwise.
+func (check *Checker) handleSPMDIndirect(x *operand) bool {
+	if !buildcfg.Experiment.SPMD {
+		return false
+	}
+	spmdType, ok := x.typ().(*SPMDType)
+	if !ok || !spmdType.IsVarying() {
+		return false
+	}
+	ptr, ok := spmdType.Elem().(*Pointer)
+	if !ok {
+		return false
+	}
+	// *Varying[*T] → Varying[T]: per-lane dereference (scatter on LHS, gather on RHS).
+	x.mode_ = variable
+	x.typ_ = NewVarying(ptr.base)
+	return true
+}
+
 // handleSPMDIndexing handles varying type propagation for indexing expressions.
 // If the index is varying, the result should also be varying.
 func (check *Checker) handleSPMDIndexing(x *operand, indexType Type) {

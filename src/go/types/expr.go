@@ -1146,6 +1146,10 @@ func (check *Checker) exprInternal(T *target, x *operand, e ast.Expr, hint Type)
 			check.validVarType(e.X, x.typ())
 			x.typ_ = &Pointer{base: x.typ()}
 		default:
+			// SPMD: *Varying[*T] produces Varying[T] (per-lane scatter/gather).
+			if check.handleSPMDIndirect(x) {
+				break
+			}
 			var base Type
 			if !underIs(x.typ(), func(u Type) bool {
 				p, _ := u.(*Pointer)
