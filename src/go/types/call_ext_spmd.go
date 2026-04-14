@@ -37,9 +37,6 @@ func (check *Checker) validateSPMDFunctionCall(call *ast.CallExpr, x *operand) {
 	if check.isCrossLaneWithinCall(call) {
 		check.validateCrossLaneWithinCall(call)
 	}
-	// lanes.CompactStore: no additional validation needed. Standard generic type
-	// checking enforces that dst []T matches v Varying[T], and Varying[bool] mask
-	// naturally restricts calls to SPMD context. See isLanesCompactStoreCall.
 }
 
 // isLanesIndexCall checks if this is a call to lanes.Index()
@@ -75,31 +72,6 @@ func (check *Checker) validateLanesIndexContext(call *ast.CallExpr) {
 	}
 
 	check.error(call, InvalidSPMDCall, "lanes.Index() can only be called in SPMD context")
-}
-
-// isLanesCompactStoreCall checks if this is a call to lanes.CompactStore.
-// No additional validation is performed beyond standard generic type checking:
-// the Varying[bool] mask parameter naturally enforces SPMD context, and the
-// generic type parameter T ensures dst []T matches v Varying[T].
-func (check *Checker) isLanesCompactStoreCall(call *ast.CallExpr) bool {
-	sel, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok {
-		return false
-	}
-
-	if sel.Sel.Name != "CompactStore" {
-		return false
-	}
-
-	if name, ok := sel.X.(*ast.Ident); ok {
-		if obj := check.lookup(name.Name); obj != nil {
-			if pkg, ok := obj.(*PkgName); ok {
-				return pkg.imported.name == "lanes"
-			}
-		}
-	}
-
-	return false
 }
 
 // isCrossLaneWithinCall checks if this is a call to lanes.*Within functions
