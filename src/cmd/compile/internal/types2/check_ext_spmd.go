@@ -179,7 +179,9 @@ func (check *Checker) getTypeSize(typ Type) int64 {
 		elemSize := check.getTypeSize(t.elem)
 		return elemSize * t.len
 	case *Slice:
-		return 24 // slice header size (3 * 8 bytes)
+		// For SPMD lane count: use element type size, not header size.
+		// Enables N>1 for go-for over slice-of-slices ([][]T → sizeof(T)).
+		return check.getTypeSize(t.elem)
 	case *Pointer:
 		return 8 // pointer size
 	default:

@@ -172,7 +172,9 @@ func (check *Checker) getTypeSize(typ Type) int64 {
 	case *Array:
 		return check.getTypeSize(t.elem) * t.len
 	case *Slice:
-		return check.conf.sizeof(typ)
+		// For SPMD lane count: use element type size, not header size.
+		// Enables N>1 for go-for over slice-of-slices ([][]T → sizeof(T)).
+		return check.getTypeSize(t.elem)
 	case *Pointer:
 		return check.conf.sizeof(typ)
 	default:
