@@ -71,9 +71,32 @@ func (check *Checker) indexExpr(x *operand, e *indexedExpr) (isFuncInst bool) {
 		}
 	}
 
-	// SPMD: Reject indexing on varying types with clear error
+	// SPMD: Allow indexing on Varying[array] types, reject others.
 	if buildcfg.Experiment.SPMD {
-		if _, ok := x.typ().(*SPMDType); ok {
+		if spmdType, ok := x.typ().(*SPMDType); ok {
+			// Check if the element type is an array — if so, allow indexing.
+			if arr, ok := spmdType.Elem().Underlying().(*Array); ok {
+				// Varying[[N]T][index] → Varying[T]
+				var index operand
+				if len(e.indices) == 1 {
+					check.expr(nil, &index, e.indices[0])
+					if !check.isValidIndex(&index, InvalidIndex, "array", false) {
+						x.invalidate()
+						return false
+					}
+					// Check bounds if index is constant.
+					if index.mode() == constant_ {
+						length := arr.Len()
+						if i, ok := constant.Int64Val(index.val); ok && (i < 0 || i >= length) {
+							check.errorf(&index, InvalidIndex, "index %d is out of bounds [0:%d]", i, length)
+						}
+					}
+				}
+				x.mode_ = value
+				x.typ_ = NewVarying(arr.Elem())
+				return false
+			}
+			// Not an array — reject.
 			check.errorf(x, NonIndexableOperand, "cannot index %s (varying types are not indexable; use reduce.From to extract elements)", x)
 			check.use(e.indices...)
 			x.invalidate()
