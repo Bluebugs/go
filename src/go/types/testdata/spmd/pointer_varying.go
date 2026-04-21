@@ -11,14 +11,13 @@ import "lanes"
 type IntPoint struct{ X, Y int }
 
 func structPointers() {
-	var v lanes.Varying[int]
-	_ = v
 	points := [4]IntPoint{}
 	go for i := range 4 {
 		pointPtr := &points[i] // &points[varyingIndex] gives Varying[*IntPoint]
-		// Field access through Varying[*IntPoint] is deferred (not yet implemented).
-		// For now, just verify the pointer is Varying[*IntPoint].
-		_ = pointPtr
+		x := pointPtr.X        // gather: must produce Varying[int]
+		pointPtr.Y = x + 1     // scatter-store: Varying[int] → field Y
+		pointPtr.X += 10       // read-modify-write: gather + add + scatter
+		_ = x
 	}
 	_ = points
 }
@@ -45,4 +44,22 @@ func varyingPtrDeref() {
 		result = *ptr
 	}
 	_ = result
+}
+
+// Method calls on Varying[*T] must still be rejected per the design's
+// non-goals. Address-of field is also rejected for now (YAGNI — loosen
+// if a real use case appears).
+type pointMethods struct{ X, Y int }
+
+func (p *pointMethods) Scale(factor int) int { return p.X * factor }
+
+func varyingPtrErrors() {
+	pts := [4]pointMethods{}
+	go for i := range 4 {
+		ptr := &pts[i]
+		_ = ptr.Scale(2) // ERROR "method calls on Varying\\[\\*pointMethods\\] not supported"
+		q := &ptr.X      // ERROR "cannot take address of field through Varying\\[\\*T\\]"
+		_ = q
+	}
+	_ = pts
 }
