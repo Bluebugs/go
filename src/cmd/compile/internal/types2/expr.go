@@ -145,6 +145,18 @@ func (check *Checker) unary(x *operand, e *syntax.Operation) {
 			return
 		}
 
+		// SPMD: reject &(Varying[*S]).field — address-of through varying pointer vector.
+		if buildcfg.Experiment.SPMD {
+			if sel, ok := syntax.Unparen(e.X).(*syntax.SelectorExpr); ok {
+				var base operand
+				check.rawExpr(nil, &base, sel.X, nil, false)
+				if _, ok := spmdUnwrapVaryingPointer(base.typ()); ok {
+					check.errorf(e, UndefinedOp, "cannot take address of field through Varying[*T]")
+					x.invalidate()
+					return
+				}
+			}
+		}
 		// SPMD: &Varying[T] produces Varying[*T] (per-lane pointer vector).
 		if buildcfg.Experiment.SPMD {
 			if spmdType, ok := x.typ().(*SPMDType); ok && spmdType.IsVarying() {
@@ -1198,6 +1210,10 @@ func (check *Checker) exprInternal(T *target, x *operand, e syntax.Expr, hint Ty
 					check.validVarType(e.X, x.typ())
 					x.typ_ = &Pointer{base: x.typ()}
 				default:
+					// SPMD: *Varying[*T] produces Varying[T] (per-lane scatter/gather).
+					if check.handleSPMDIndirect(x) {
+						break
+					}
 					var base Type
 					if !underIs(x.typ(), func(u Type) bool {
 						p, _ := u.(*Pointer)
