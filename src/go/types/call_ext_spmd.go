@@ -204,22 +204,29 @@ func (check *Checker) validateSPMDMakeType(arg ast.Expr, T Type) {
 }
 
 // spmdWrapFieldType returns the SPMD-adjusted type for a struct field access.
-// When the receiver is *Varying[S] (a uniform pointer to a varying struct),
-// field access should return Varying[fieldType], not fieldType.
+// When the receiver is *Varying[S] (a uniform pointer to a varying struct) OR
+// Varying[*S] (a varying pointer vector to a uniform struct), field access
+// should return Varying[fieldType] rather than bare fieldType.
 // For all other receivers, the field type is returned unchanged.
 func spmdWrapFieldType(receiverType, fieldType Type) Type {
 	if !buildcfg.Experiment.SPMD {
 		return fieldType
 	}
-	ptr, ok := receiverType.(*Pointer)
-	if !ok {
-		return fieldType
+	// Existing: *Varying[S] → Varying[fieldT]
+	if ptr, ok := receiverType.(*Pointer); ok {
+		if _, ok := ptr.Elem().(*SPMDType); ok {
+			if _, alreadyVarying := fieldType.(*SPMDType); alreadyVarying {
+				return fieldType
+			}
+			return NewVarying(fieldType)
+		}
 	}
-	if _, ok := ptr.Elem().(*SPMDType); !ok {
-		return fieldType
+	// New: Varying[*S] → Varying[fieldT] (symmetric wrap, different receiver shape)
+	if _, ok := spmdUnwrapVaryingPointer(receiverType); ok {
+		if _, alreadyVarying := fieldType.(*SPMDType); alreadyVarying {
+			return fieldType
+		}
+		return NewVarying(fieldType)
 	}
-	if _, alreadyVarying := fieldType.(*SPMDType); alreadyVarying {
-		return fieldType
-	}
-	return NewVarying(fieldType)
+	return fieldType
 }

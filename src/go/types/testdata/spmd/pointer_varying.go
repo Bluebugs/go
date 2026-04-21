@@ -57,8 +57,8 @@ func varyingPtrErrors() {
 	pts := [4]pointMethods{}
 	go for i := range 4 {
 		ptr := &pts[i]
-		_ = ptr.Scale(2) // ERROR "method calls on Varying\\[\\*pointMethods\\] not supported"
-		q := &ptr.X      // ERROR "cannot take address of field through Varying\\[\\*T\\]"
+		_ = ptr.Scale /* ERRORx "method calls on.*Varying\\[\\*pointMethods\\] not supported" */ (2)
+		q := & /* ERRORx "cannot take address of field through Varying\\[\\*T\\]" */ ptr.X
 		_ = q
 	}
 	_ = pts

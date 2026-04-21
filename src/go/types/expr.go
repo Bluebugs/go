@@ -11,6 +11,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/token"
+	"internal/buildcfg"
 	. "internal/types/errors"
 )
 
@@ -141,6 +142,18 @@ func (check *Checker) unary(x *operand, e *ast.UnaryExpr) {
 			check.errorf(x, UnaddressableOperand, invalidOp+"cannot take address of %s", x)
 			x.invalidate()
 			return
+		}
+		// SPMD: reject &(Varying[*S]).field — address-of through varying pointer vector.
+		if buildcfg.Experiment.SPMD {
+			if sel, ok := ast.Unparen(e.X).(*ast.SelectorExpr); ok {
+				var base operand
+				check.rawExpr(nil, &base, sel.X, nil, false)
+				if _, ok := spmdUnwrapVaryingPointer(base.typ()); ok {
+					check.errorf(e, UndefinedOp, "cannot take address of field through Varying[*T]")
+					x.invalidate()
+					return
+				}
+			}
 		}
 		// SPMD: &Varying[T] produces Varying[*T] (per-lane pointer vector).
 		if check.handleSPMDAddrOf(x) {

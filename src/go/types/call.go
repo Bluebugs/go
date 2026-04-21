@@ -696,6 +696,7 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr, wantType bool) {
 		index        []int
 		indirect     bool
 		receiverType Type
+		lookupType   Type
 	)
 
 	sel := e.Sel.Name
@@ -833,7 +834,13 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr, wantType bool) {
 	}
 
 	receiverType = x.typ()
-	obj, index, indirect = lookupFieldOrMethod(receiverType, x.mode() == variable, check.pkg, sel, false)
+	// SPMD: if receiver is Varying[*S], look up the field on *S and restore
+	// the varying wrap afterward via spmdWrapFieldType.
+	lookupType = receiverType
+	if innerT, ok := spmdUnwrapVaryingPointer(receiverType); ok {
+		lookupType = NewPointer(innerT)
+	}
+	obj, index, indirect = lookupFieldOrMethod(lookupType, x.mode() == variable, check.pkg, sel, false)
 	if obj == nil {
 		// Don't report another error if the underlying type was invalid (go.dev/issue/49541).
 		if !isValid(x.typ().Underlying()) {
@@ -884,6 +891,12 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr, wantType bool) {
 		x.typ_ = spmdWrapFieldType(receiverType, obj.typ)
 
 	case *Func:
+		// SPMD: method calls on Varying[*S] are not supported.
+		if _, ok := spmdUnwrapVaryingPointer(receiverType); ok {
+			check.errorf(e.Sel, UndefinedOp, "method calls on %s not supported", receiverType)
+			goto Error
+		}
+
 		check.objDecl(obj) // ensure fully set-up signature
 		check.addDeclDep(obj)
 
