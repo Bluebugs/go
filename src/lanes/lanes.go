@@ -187,7 +187,141 @@ func SwizzleWithin[T any](v Varying[T], indices Varying[int], groupSize int) Var
 	panic("lanes.SwizzleWithin is a compiler builtin and should be replaced during compilation")
 }
 
+// =====================================================================
+// FP math primitives
+// Each function is an element-wise floating-point operation lowered to
+// the corresponding LLVM vector intrinsic (@llvm.<op>.vN{f32,f64}).
+// =====================================================================
+
+// Sqrt returns the per-lane square root of value.
+// NaN for negative inputs per IEEE 754. Lowered to @llvm.sqrt.vN{f32,f64}.
+//
+//go:noinline
+func Sqrt[T floatingPoint](value Varying[T]) Varying[T] {
+	return sqrtBuiltin(value)
+}
+
+//go:noinline
+func sqrtBuiltin[T floatingPoint](value Varying[T]) Varying[T] {
+	panic("lanes.sqrtBuiltin is a compiler builtin and should be replaced during compilation")
+}
+
+// Abs returns the per-lane absolute value. Lowered to @llvm.fabs.vN{f32,f64}.
+//
+//go:noinline
+func Abs[T floatingPoint](value Varying[T]) Varying[T] {
+	return absBuiltin(value)
+}
+
+//go:noinline
+func absBuiltin[T floatingPoint](value Varying[T]) Varying[T] {
+	panic("lanes.absBuiltin is a compiler builtin and should be replaced during compilation")
+}
+
+// Floor returns the per-lane largest integer value <= value (round toward -inf).
+// Lowered to @llvm.floor.vN{f32,f64}.
+//
+//go:noinline
+func Floor[T floatingPoint](value Varying[T]) Varying[T] {
+	return floorBuiltin(value)
+}
+
+//go:noinline
+func floorBuiltin[T floatingPoint](value Varying[T]) Varying[T] {
+	panic("lanes.floorBuiltin is a compiler builtin and should be replaced during compilation")
+}
+
+// Ceil returns the per-lane smallest integer value >= value (round toward +inf).
+// Lowered to @llvm.ceil.vN{f32,f64}.
+//
+//go:noinline
+func Ceil[T floatingPoint](value Varying[T]) Varying[T] {
+	return ceilBuiltin(value)
+}
+
+//go:noinline
+func ceilBuiltin[T floatingPoint](value Varying[T]) Varying[T] {
+	panic("lanes.ceilBuiltin is a compiler builtin and should be replaced during compilation")
+}
+
+// Round returns the per-lane value rounded to the nearest integer, with ties
+// rounded away from zero (matches Go's math.Round semantics).
+// Lowered to @llvm.round.vN{f32,f64}.
+//
+//go:noinline
+func Round[T floatingPoint](value Varying[T]) Varying[T] {
+	return roundBuiltin(value)
+}
+
+//go:noinline
+func roundBuiltin[T floatingPoint](value Varying[T]) Varying[T] {
+	panic("lanes.roundBuiltin is a compiler builtin and should be replaced during compilation")
+}
+
+// Trunc returns the per-lane value with its fractional part removed
+// (rounded toward zero). Lowered to @llvm.trunc.vN{f32,f64}.
+//
+//go:noinline
+func Trunc[T floatingPoint](value Varying[T]) Varying[T] {
+	return truncBuiltin(value)
+}
+
+//go:noinline
+func truncBuiltin[T floatingPoint](value Varying[T]) Varying[T] {
+	panic("lanes.truncBuiltin is a compiler builtin and should be replaced during compilation")
+}
+
+// Min returns the per-lane minimum of a and b. IEEE 754 minNum semantics:
+// when one operand is NaN, returns the other; matches Go's built-in min().
+// Note: this is the PAIRWISE per-lane min. To collapse a Varying into a scalar
+// minimum, use reduce.Min. Lowered to @llvm.minnum.vN{f32,f64}.
+//
+//go:noinline
+func Min[T floatingPoint](a, b Varying[T]) Varying[T] {
+	return minBuiltin(a, b)
+}
+
+//go:noinline
+func minBuiltin[T floatingPoint](a, b Varying[T]) Varying[T] {
+	panic("lanes.minBuiltin is a compiler builtin and should be replaced during compilation")
+}
+
+// Max returns the per-lane maximum of a and b. IEEE 754 maxNum semantics:
+// when one operand is NaN, returns the other; matches Go's built-in max().
+// Note: this is the PAIRWISE per-lane max. To collapse a Varying into a scalar
+// maximum, use reduce.Max. Lowered to @llvm.maxnum.vN{f32,f64}.
+//
+//go:noinline
+func Max[T floatingPoint](a, b Varying[T]) Varying[T] {
+	return maxBuiltin(a, b)
+}
+
+//go:noinline
+func maxBuiltin[T floatingPoint](a, b Varying[T]) Varying[T] {
+	panic("lanes.maxBuiltin is a compiler builtin and should be replaced during compilation")
+}
+
+// FMA returns the per-lane fused multiply-add: a*b + c, with a single rounding
+// step (no intermediate rounding of the product). Matches the semantics of
+// Go's math.FMA (added in Go 1.14). Lowered to @llvm.fma.vN{f32,f64}.
+//
+//go:noinline
+func FMA[T floatingPoint](a, b, c Varying[T]) Varying[T] {
+	return fmaBuiltin(a, b, c)
+}
+
+//go:noinline
+func fmaBuiltin[T floatingPoint](a, b, c Varying[T]) Varying[T] {
+	panic("lanes.fmaBuiltin is a compiler builtin and should be replaced during compilation")
+}
+
 // Type constraints for generic functions
 type integer interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
+}
+
+// floatingPoint constrains lanes.* math builtins to IEEE 754 binary float types.
+// Mirrors Go's stdlib math package, which handles both float32 and float64 internally.
+type floatingPoint interface {
+	~float32 | ~float64
 }
