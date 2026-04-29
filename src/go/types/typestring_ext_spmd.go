@@ -4,7 +4,10 @@
 
 package types
 
-import "internal/buildcfg"
+import (
+	"internal/buildcfg"
+	"strconv"
+)
 
 func (w *typeWriter) handleSPMDTypeString(typ Type) bool {
 	if !buildcfg.Experiment.SPMD {
@@ -19,6 +22,10 @@ func (w *typeWriter) handleSPMDTypeString(typ Type) bool {
 			w.string("lanes.Varying[")
 			w.typ(t.elem)
 			w.byte(']')
+			if t.lanes > 0 {
+				w.byte('_')
+				w.string(strconv.Itoa(t.lanes))
+			}
 		}
 		return true
 	}

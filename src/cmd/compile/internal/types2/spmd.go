@@ -14,14 +14,39 @@ const (
 
 // SPMDType represents a varying qualified type (lanes.Varying[T]).
 // Since uniform is now implicit (regular Go types are uniform), SPMDType always means varying.
+//
+// The optional `lanes` field is set by the SSA predication pass to a
+// non-zero canonical lane count when the value is materialized inside
+// an SPMD loop scope (e.g., a Varying[int] inside a `go for` over
+// []float64 carries lanes=2 on WASM SIMD128 to match the loop's
+// iteration width). The type-checker only ever produces width-free
+// instances (lanes=0); width-fixed instances exist only post
+// type-checking, mutated in place via the SSA predication pass.
+//
+// TinyGo's getLLVMType reads Lanes() during Varying[T] materialization
+// to emit the LLVM vector at the canonical width. When lanes=0
+// (abstract), TinyGo falls back to its existing element-natural /
+// function-min derivation.
 type SPMDType struct {
 	qualifier SPMDQualifier
 	elem      Type
+	lanes     int // 0 = abstract; > 0 = width-fixed (SSA predication pass)
 }
 
-// NewVarying returns a new varying type for the given element type.
+// NewVarying returns a new abstract varying type for the given element
+// type. The type-checker uses this constructor; its Lanes() returns 0.
 func NewVarying(elem Type) *SPMDType {
 	return &SPMDType{qualifier: VaryingQualifier, elem: elem}
+}
+
+// NewVaryingWithLanes returns a new width-fixed varying type. Used by
+// the SSA predication pass to mutate in-loop Varying values' types to
+// carry the surrounding loop's canonical lane count. TinyGo reads
+// Lanes() during getLLVMType to materialize the LLVM vector at the
+// right width. Type-checker callers should not use this constructor —
+// they produce abstract types via NewVarying.
+func NewVaryingWithLanes(elem Type, lanes int) *SPMDType {
+	return &SPMDType{qualifier: VaryingQualifier, elem: elem, lanes: lanes}
 }
 
 // Qualifier returns the SPMD qualifier (uniform or varying).
@@ -35,6 +60,12 @@ func (s *SPMDType) IsVarying() bool { return s.qualifier == VaryingQualifier }
 
 // Elem returns the element type of the SPMD type.
 func (s *SPMDType) Elem() Type { return s.elem }
+
+// Lanes returns the canonical lane count of a width-fixed SPMD type.
+// Returns 0 for abstract (type-checker-produced) instances. Set by the
+// SSA predication pass via NewVaryingWithLanes; read by TinyGo's
+// getLLVMType to materialize the LLVM vector at the right width.
+func (s *SPMDType) Lanes() int { return s.lanes }
 
 // Underlying returns the underlying type of the SPMD type.
 // For SPMD types, the underlying type is the element type.

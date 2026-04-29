@@ -6,7 +6,10 @@
 
 package types2
 
-import "internal/buildcfg"
+import (
+	"internal/buildcfg"
+	"strconv"
+)
 
 // handleSPMDTypeString handles SPMD types in the typeWriter.typ method.
 // Returns true if the type was handled, false if it should fall through to default.
@@ -24,6 +27,10 @@ func (w *typeWriter) handleSPMDTypeString(typ Type) bool {
 			w.string("lanes.Varying[")
 			w.typ(t.elem)
 			w.byte(']')
+			if t.lanes > 0 {
+				w.byte('_')
+				w.string(strconv.Itoa(t.lanes))
+			}
 		}
 		return true
 	}
