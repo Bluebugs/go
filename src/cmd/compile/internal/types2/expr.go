@@ -148,12 +148,28 @@ func (check *Checker) unary(x *operand, e *syntax.Operation) {
 		// SPMD: reject &(Varying[*S]).field — address-of through varying pointer vector.
 		if buildcfg.Experiment.SPMD {
 			if sel, ok := syntax.Unparen(e.X).(*syntax.SelectorExpr); ok {
-				var base operand
-				check.rawExpr(nil, &base, sel.X, nil, false)
-				if _, ok := spmdUnwrapVaryingPointer(base.typ()); ok {
-					check.errorf(e, UndefinedOp, "cannot take address of field through Varying[*T]")
-					x.invalidate()
-					return
+				// Skip the check when sel.X is a package-qualified identifier
+				// (e.g., &pkg.Var). Evaluating a bare package name via rawExpr
+				// produces "use of package not in selector" because the name is
+				// a *PkgName, not a value. &pkg.Var is always a valid address-of
+				// expression for an addressable package-level variable; a package
+				// name can never hold a Varying[*T] value.
+				skipCheck := false
+				if name, ok := syntax.Unparen(sel.X).(*syntax.Name); ok {
+					if obj := check.lookup(name.Value); obj != nil {
+						if _, isPkg := obj.(*PkgName); isPkg {
+							skipCheck = true
+						}
+					}
+				}
+				if !skipCheck {
+					var base operand
+					check.rawExpr(nil, &base, sel.X, nil, false)
+					if _, ok := spmdUnwrapVaryingPointer(base.typ()); ok {
+						check.errorf(e, UndefinedOp, "cannot take address of field through Varying[*T]")
+						x.invalidate()
+						return
+					}
 				}
 			}
 		}
