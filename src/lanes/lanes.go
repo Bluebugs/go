@@ -301,9 +301,22 @@ func maxBuiltin[T floatingPoint](a, b Varying[T]) Varying[T] {
 	panic("lanes.maxBuiltin is a compiler builtin and should be replaced during compilation")
 }
 
-// FMA returns the per-lane fused multiply-add: a*b + c, with a single rounding
-// step (no intermediate rounding of the product). Matches the semantics of
-// Go's math.FMA (added in Go 1.14). Lowered to @llvm.fma.vN{f32,f64}.
+// FMA returns the per-lane fused multiply-add: a*b + c.
+//
+// Rounding depends on the backend:
+//   - x86 (+fma), and any target with hardware vector FMA: exact IEEE 754
+//     single-rounding (no intermediate rounding of the product), matching
+//     Go's math.FMA (added in Go 1.14). Lowered to @llvm.fma.vN{f32,f64}.
+//   - WASM with +relaxed-simd: lowered to @llvm.wasm.relaxed.madd
+//     (f32x4.relaxed_madd / f64x2.relaxed_madd), whose rounding is
+//     implementation-defined — the runtime may use a single fused rounding
+//     or two roundings (unfused mul+add). This avoids scalarizing to per-lane
+//     fmaf libcalls, which base WASM SIMD128 would otherwise require since it
+//     has no vector FMA instruction.
+//
+// Use FMA when you want the compiler to emit a single multiply-add
+// instruction; rely on its exact single-rounding only on backends that
+// guarantee it.
 //
 //go:noinline
 func FMA[T floatingPoint](a, b, c Varying[T]) Varying[T] {
